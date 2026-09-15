@@ -1,0 +1,78 @@
+{
+  "devices": {
+    "16a": "http://16a.local",
+    "24ai": "http://24ai.local"
+  },
+  "allocations": [
+    {
+      "device": "16a",
+      "channels": {
+        "2": "ohl",
+        "3": "ohr",
+        "4": "Kickin",
+        "5": "Snare_Top",
+        "6": "joshl",
+        "7": "joshr",
+        "8": "bassd1",
+        "9": "john_mic",
+        "10": "kick_out",
+        "11": "snar_bottom",
+        "12": "hihat",
+        "13": "tom1",
+        "14": "tom2",
+        "15": "bass_mic"
+      }
+    },
+    {
+      "device": "24ai",
+      "channels": {
+        "8": "fractal_l",
+        "9": "fractal_r",
+        "10": "john_line6l",
+        "11": "john_line6r",
+        "12": "boogiebass",
+        "13": "billvox",
+        "14": "john_vox"
+      }
+    }
+  ],
+  "studio_bus_architecture": {
+    "main_mix_bus": "Bus_1",
+    "stereo_output": "Output_1-2",
+    "top_level_busses": [
+      {
+        "name": "drums",
+        "destination": "Bus_1",
+        "sub_stacks": [
+          {"name": "kick", "tracks": ["Kickin", "kick_out"]},
+          {"name": "snare", "tracks": ["Snare_Top", "snar_bottom"]},
+          {"name": "oh/hh", "tracks": ["ohl", "ohr", "hihat"]},
+          {"name": "toms", "tracks": ["tom1", "tom2", "tom3", "tom4", "tom5", "tom6", "tom7"]}
+        ]
+      },
+      {
+        "name": "Smash_Guitars",
+        "destination": "Bus_1",
+        "sub_stacks": [
+          {"name": "joshgtr", "tracks": ["joshl", "joshr", "fractal_l", "fractal_r"]},
+          {"name": "johngtr", "tracks": ["john_mic", "john_line6l", "john_line6r"]}
+        ]
+      },
+      {
+        "name": "Punchy_Bass",
+        "destination": "Bus_1",
+        "tracks": ["bassd1", "boogiebass", "bass_mic"]
+      },
+      {
+        "name": "Screaming_Mons",
+        "destination": "Bus_1",
+        "tracks": ["billvox", "john_mic01", "john_vox"]
+      }
+    ],
+    "fx_sends": [
+      {"name": "Drum_Reverb", "source_bus": "drums", "send_level": -12.0},
+      {"name": "Guitar_Intro_FX", "source_bus": "Smash_Guitars", "send_level": -6.0}
+    ]
+  }
+}
+
