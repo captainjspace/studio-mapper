@@ -9,9 +9,6 @@ fi
 echo "Running full test suite..."
 go test -v ./...
 
-echo "Validating template generation harness..."
-go test -v -run TestDeclarativeTemplateHydration
-
 echo "Compiling binary..."
 go build -o studio-map .
 

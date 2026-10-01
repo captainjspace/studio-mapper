@@ -1,123 +1,140 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
-	"os"
 )
 
-
-type StudioBusArchitecture struct {
-	MainMixBus     string           `json:"main_mix_bus"`
-	StereoOutput   string           `json:"stereo_output"`
-	TopLevelBusses []TopLevelBus    `json:"top_level_busses"`
-	FxSends        []FxSend         `json:"fx_sends"`
+func (n *Node) describe() string {
+	var parts []string
+	if n.Bus > 0 {
+		parts = append(parts, fmt.Sprintf("[Bus %d]", n.Bus))
+	}
+	if n.Pan != nil {
+		parts = append(parts, fmt.Sprintf("pan %+d", *n.Pan))
+	}
+	if p := cmpOrDash(n.Preset, n.Plugin); p != "—" {
+		parts = append(parts, "⟵ "+p)
+	}
+	if n.Insert != nil {
+		parts = append(parts, "⏱ ("+n.Insert.String()+")")
+	}
+	for _, s := range n.Sends {
+		parts = append(parts, fmt.Sprintf("⤳ %s %.1fdB", s.To, s.Level))
+	}
+	return strings.Join(parts, "  ")
 }
 
-type TopLevelBus struct {
-	Name        string     `json:"name"`
-	Destination string     `json:"destination"`
-	SubStacks   []SubStack `json:"sub_stacks"`
-	Tracks      []string   `json:"tracks"` // For flat channels without nested sub-stacks
-}
-
-type SubStack struct {
-	Name   string   `json:"name"`
-	Tracks []string `json:"tracks"`
-}
-
-type FxSend struct {
-	Name      string  `json:"name"`
-	SourceBus string  `json:"source_bus"`
-	SendLevel float64 `json:"send_level"`
-}
-
-// GenerateConsoleBlueprint prints out a clean structural overview of your Logic environment mapping
-func GenerateConsoleBlueprint(configJSON []byte) {
-	var conf Config
-	if err := json.Unmarshal(configJSON, &conf); err != nil {
-		fmt.Printf("❌ Blueprint extraction failed: %v\n", err)
+// GenerateConsoleBlueprint prints the signal flow from Stereo_Out back to every track.
+func GenerateConsoleBlueprint(g MixGraph) {
+	fmt.Println("\n🎛️  LOGIC SIGNAL FLOW")
+	out, ok := g.Nodes[stereoOut]
+	if !ok {
+		fmt.Printf(" (no %s in mix config)\n", stereoOut)
 		return
 	}
-
-	fmt.Println("\n🎛️  GENERATE LOGIC CONSOLE TRACK MIX BLUEPRINT")
-	fmt.Printf(" [Main Mix Engine] ➡️ %s ➡️  Master Out: %s\n", conf.StudioBusArchitecture.MainMixBus, conf.StudioBusArchitecture.StereoOutput)
-	
-	for _, bus := range conf.StudioBusArchitecture.TopLevelBusses {
-		fmt.Printf(" ├── 📂 Top-Level Bus: [%s] Sums ➡️ %s\n", bus.Name, bus.Destination)
-		
-		// Parse nested multi-tier stacks (e.g., drums > kick > kickin)
-		for _, sub := range bus.SubStacks {
-			fmt.Printf(" │    ├── 📁 Sub-Stack: (%s)\n", sub.Name)
-			for _, track := range sub.Tracks {
-				fmt.Printf(" │    │    └── 🛑 Channel Strip: %s\n", track)
-			}
-		}
-
-		// Parse flat channels (e.g., Screaming Mons > billvox)
-		for _, track := range bus.Tracks {
-			fmt.Printf(" │    └── 🛑 Channel Strip: %s\n", track)
-		}
-	}
-
-	fmt.Println(" └── 🎚️  Aux FX Automation Matrix")
-	for _, fx := range conf.StudioBusArchitecture.FxSends {
-		fmt.Printf("      └── 🔗 %s Send ➡️ Route [%s] at %.1fdB\n", fx.Name, fx.SourceBus, fx.SendLevel)
-	}
-}
-// GenerateLogicXMLPackage handles hydration of the Logic Document template asset string tokens
-func GenerateLogicXMLPackage(configData []byte, baseTemplatePath string, outputPath string) error {
-	// Simple validation structure to check layout parsing boundaries inside unit tests
-	var fullConfig struct {
-		LogicTemplate struct {
-			SummingStacks []struct {
-				StackName      string  `json:"stack_name"`
-				BusNumber      int     `json:"bus_number"`
-				BaselineVolume float64 `json:"baseline_volume"`
-				Tracks         []struct {
-					Name     string `json:"name"`
-					DawInput int    `json:"daw_input"`
-					Pan      int    `json:"pan"`
-				} `json:"tracks"`
-			} `json:"summing_stacks"`
-		} `json:"logic_template"`
-	}
-	
-	if err := json.Unmarshal(configData, &fullConfig); err != nil {
-		return fmt.Errorf("failed to parse template definitions: %w", err)
-	}
-
-	var sb strings.Builder
-	for _, stack := range fullConfig.LogicTemplate.SummingStacks {
-		sb.WriteString(fmt.Sprintf("    <TrackStack type=\"Summing\" name=\"%s\" outputBus=\"Bus_%d\">\n", stack.StackName, stack.BusNumber))
-		sb.WriteString(fmt.Sprintf("      <AuxObject name=\"%s_Master\" volume=\"%.2f\" />\n", stack.StackName, stack.BaselineVolume))
-		for _, track := range stack.Tracks {
-			sb.WriteString("      <AudioTrack>\n")
-			sb.WriteString(fmt.Sprintf("        <TrackHeader name=\"%s\" />\n", track.Name))
-			sb.WriteString(fmt.Sprintf("        <ChannelRouting inputIndex=\"%d\" outputDestination=\"Bus_%d\" />\n", track.DawInput, stack.BusNumber))
-			sb.WriteString(fmt.Sprintf("        <Pan value=\"%d\" />\n", track.Pan))
-			sb.WriteString("      </AudioTrack>\n")
-		}
-		sb.WriteString("    </TrackStack>\n")
-	}
-
-	templateContent, err := os.ReadFile(baseTemplatePath)
-	if err != nil {
-		return fmt.Errorf("unable to access target base template xml asset: %w", err)
-	}
-
-	hydratedOutput := strings.Replace(
-		string(templateContent),
-		"{{DECLARATIVE_TRACK_MATRIX}}",
-		sb.String(),
-		1,
-	)
-
-	if err := os.WriteFile(outputPath, []byte(hydratedOutput), 0644); err != nil {
-		return fmt.Errorf("failed to commit hydrated project file: %w", err)
-	}
-
-	return nil
+	fmt.Printf(" 🔊 %s  %s\n", out.Name, out.describe())
+	printBranch(g, out, " ")
 }
 
+func printBranch(g MixGraph, n *Node, indent string) {
+	kids := g.children(n.Name)
+	for i, k := range kids {
+		last := i == len(kids)-1 && len(n.Tracks) == 0
+		fmt.Printf("%s%s 📂 %s  %s\n", indent, branch(last), k.Name, k.describe())
+		printBranch(g, k, indent+stem(last))
+	}
+	for i, t := range n.Tracks {
+		fmt.Printf("%s%s %-6s %s\n", indent, branch(i == len(n.Tracks)-1), t.where(), t.Label)
+	}
+}
+
+func branch(last bool) string {
+	if last {
+		return "└──"
+	}
+	return "├──"
+}
+
+func stem(last bool) string {
+	if last {
+		return "    "
+	}
+	return "│   "
+}
+
+// printRouting prints the build sheet: what to set on each strip in the Logic template.
+func printRouting(g MixGraph, presets Presets) {
+	fmt.Println("\n── TRACKS (Input → Output, channel preset)")
+	fmt.Printf("  %-6s %-16s %-24s %s\n", "Input", "Track", "Output", "Channel preset")
+	for _, name := range g.Order {
+		n := g.Nodes[name]
+		for _, t := range n.Tracks {
+			rel, _ := presets.find("Track", t.Label)
+			fmt.Printf("  %-6s %-16s %-24s %s\n", t.where(), t.Label, busLabel(g, name), cmpOrDash(rel, ""))
+		}
+	}
+
+	fmt.Println("\n── STACKS / AUX / OUTPUT (input bus → output)")
+	fmt.Printf("  %-8s %-18s %-7s %-24s %-5s %s\n", "Input", "Name", "Kind", "Output", "Pan", "Preset / plugin")
+	for _, name := range g.Order {
+		n := g.Nodes[name]
+		in, outTo, pan := busNum(n), "—", "—"
+		if n.Kind != "output" {
+			outTo = busLabel(g, n.Output)
+		}
+		if n.Pan != nil {
+			pan = fmt.Sprintf("%+d", *n.Pan)
+		}
+		fmt.Printf("  %-8s %-18s %-7s %-24s %-5s %s\n", in, name, n.Kind, outTo, pan, cmpOrDash(n.Preset, n.Plugin))
+	}
+
+	if len(g.Utility) > 0 {
+		fmt.Println("\n── NOT RECORDED (hardware label only, no Logic track)")
+		for _, t := range g.Utility {
+			fmt.Printf("  In %-3d %s\n", t.HostIn, t.Label)
+		}
+	}
+
+	fmt.Println("\n── OUTBOARD (I/O plugin inserts)")
+	for _, name := range g.Order {
+		if n := g.Nodes[name]; n.Insert != nil {
+			fmt.Printf("  %-18s %s  (%s)\n", name, n.Plugin, n.Insert)
+		}
+	}
+
+	fmt.Println("\n── SENDS")
+	for _, name := range g.Order {
+		for _, s := range g.Nodes[name].Sends {
+			fmt.Printf("  %-18s ⤳ %-24s %.1f dB\n", name, busLabel(g, s.To), s.Level)
+		}
+	}
+}
+
+func busNum(n *Node) string {
+	if n.Kind == "output" {
+		return "St Out"
+	}
+	return fmt.Sprintf("Bus %d", n.Bus)
+}
+
+func busLabel(g MixGraph, name string) string {
+	n, ok := g.Nodes[name]
+	switch {
+	case !ok:
+		return name + " (missing)"
+	case n.Kind == "output":
+		return busNum(n)
+	default:
+		return busNum(n) + " (" + name + ")"
+	}
+}
+
+func cmpOrDash(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return "—"
+}

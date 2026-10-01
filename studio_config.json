@@ -1,78 +1,100 @@
 {
   "devices": {
     "16a": "http://16a.local",
-    "24ai": "http://24ai.local"
+    "24ai": "http://24ai.local",
+    "10pre": ""
   },
-  "allocations": [
+  "interfaces": {
+    "Motu 16A": "16a",
+    "Motu 24Ai": "24ai",
+    "Motu 10pre": "10pre"
+  },
+  "host_device": "10pre",
+  "host_inputs": [
     {
       "device": "16a",
-      "channels": {
-        "2": "ohl",
-        "3": "ohr",
-        "4": "Kickin",
-        "5": "Snare_Top",
-        "6": "joshl",
-        "7": "joshr",
-        "8": "bassd1",
-        "9": "john_mic",
-        "10": "kick_out",
-        "11": "snar_bottom",
-        "12": "hihat",
-        "13": "tom1",
-        "14": "tom2",
-        "15": "bass_mic"
-      }
+      "bank": "Analog",
+      "count": 16,
+      "host_start": 1,
+      "avb_stream": 1
     },
     {
       "device": "24ai",
-      "channels": {
-        "8": "fractal_l",
-        "9": "fractal_r",
-        "10": "john_line6l",
-        "11": "john_line6r",
-        "12": "boogiebass",
-        "13": "billvox",
-        "14": "john_vox"
-      }
+      "bank": "Analog",
+      "count": 24,
+      "host_start": 17,
+      "avb_stream": 3
+    },
+    {
+      "device": "10pre",
+      "bank": "Mic/Inst",
+      "count": 10,
+      "host_start": 41
     }
   ],
-  "studio_bus_architecture": {
-    "main_mix_bus": "Bus_1",
-    "stereo_output": "Output_1-2",
-    "top_level_busses": [
-      {
-        "name": "drums",
-        "destination": "Bus_1",
-        "sub_stacks": [
-          {"name": "kick", "tracks": ["Kickin", "kick_out"]},
-          {"name": "snare", "tracks": ["Snare_Top", "snar_bottom"]},
-          {"name": "oh/hh", "tracks": ["ohl", "ohr", "hihat"]},
-          {"name": "toms", "tracks": ["tom1", "tom2", "tom3", "tom4", "tom5", "tom6", "tom7"]}
-        ]
-      },
-      {
-        "name": "Smash_Guitars",
-        "destination": "Bus_1",
-        "sub_stacks": [
-          {"name": "joshgtr", "tracks": ["joshl", "joshr", "fractal_l", "fractal_r"]},
-          {"name": "johngtr", "tracks": ["john_mic", "john_line6l", "john_line6r"]}
-        ]
-      },
-      {
-        "name": "Punchy_Bass",
-        "destination": "Bus_1",
-        "tracks": ["bassd1", "boogiebass", "bass_mic"]
-      },
-      {
-        "name": "Screaming_Mons",
-        "destination": "Bus_1",
-        "tracks": ["billvox", "john_mic01", "john_vox"]
+  "mix": {
+    "drums": {
+      "preset": "Bus/tequiladrumchannel.cst",
+      "sends": [
+        {
+          "to": "Drum_Verb",
+          "level": -12.0
+        }
+      ]
+    },
+    "Smashed_Guitars": {
+      "sends": [
+        {
+          "to": "FX",
+          "level": -6.0
+        }
+      ]
+    },
+    "joshgtr": {
+      "pan": -64
+    },
+    "johngtr": {
+      "pan": 63
+    },
+    "Punchy_Bass": {
+      "preset": "Bus/PunchyWarmBass.cst"
+    },
+    "Screaming_Demons": {
+      "sends": [
+        {
+          "to": "FX",
+          "level": -12.0
+        }
+      ]
+    },
+    "Drum_Verb": {
+      "kind": "aux",
+      "plugin": "Quantec Room Simulator/StudioDrums.pst"
+    },
+    "FX": {
+      "kind": "aux",
+      "preset": "Processing/InsaneFXStack.cst"
+    },
+    "Mix_Bus": {
+      "kind": "aux",
+      "plugin": "I:O/UA2-1176.pst",
+      "insert": {
+        "rig": "home",
+        "out": "3/4",
+        "in": "13/14"
       }
-    ],
-    "fx_sends": [
-      {"name": "Drum_Reverb", "source_bus": "drums", "send_level": -12.0},
-      {"name": "Guitar_Intro_FX", "source_bus": "Smash_Guitars", "send_level": -6.0}
-    ]
+    },
+    "Stereo_Out": {
+      "kind": "output",
+      "preset": "Output/Mastering.cst"
+    }
+  },
+  "stem_split": {
+    "Drums": "drums",
+    "Bass": "Punchy_Bass",
+    "Guitar": "Smashed_Guitars",
+    "Piano": "Synths",
+    "Vocals": "Screaming_Demons",
+    "Other": "Synths"
   }
 }
-

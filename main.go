@@ -1,238 +1,254 @@
 package main
 
 import (
-	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
 )
 
-// Config represents the master unified declarative blueprint
+const (
+	configPath = "studio_config.json"
+	sheetPath  = "studio-inputs.csv"
+)
+
+// Config holds what is not per-channel; per-channel names and stacks come from the sheet.
 type Config struct {
-	Devices               map[string]string     `json:"devices"`
-	StereoPairs           map[string][]Pair     `json:"stereo_pairs"`
-	Allocations           []Allocation          `json:"allocations"`
-	StudioBusArchitecture StudioBusArchitecture `json:"studio_bus_architecture"`
+	Devices    map[string]string  `json:"devices"`
+	Interfaces map[string]string  `json:"interfaces"`
+	HostDevice string             `json:"host_device"`
+	HostInputs []HostInput        `json:"host_inputs"`
+	PresetDir  string             `json:"preset_dir"`
+	Mix        map[string]MixNode `json:"mix"`
+	StemSplit  map[string]string  `json:"stem_split"` // Stem Splitter output -> Stack
 }
 
-type Pair struct {
-	LeftChannel int  `json:"left_channel"`
-	Paired      bool `json:"paired"`
+// HostInput maps a block of device channels onto the host's Host In numbers.
+type HostInput struct {
+	Device    string `json:"device"`
+	Bank      string `json:"bank"`
+	Count     int    `json:"count"`
+	HostStart int    `json:"host_start"`
+	AVBStream int    `json:"avb_stream,omitempty"` // first host AVB input stream carrying this block
 }
 
-type Allocation struct {
-	Device       string            `json:"device"`
-	StartChannel int               `json:"start_channel"`
-	EndChannel   int               `json:"end_channel"`
-	Pattern      string            `json:"pattern"`
-	Channels     map[string]string `json:"channels"`
-}
-
-// Logic XML structures for native driver label exports
-type ChannelName struct {
-	InputIndex int    `xml:"index,attr"`
-	CustomName string `xml:",chardata"`
+var commands = map[string]func(args []string) error{
+	"plan":    runPlan,
+	"apply":   runApply,
+	"restore": runRestore,
+	"routing": runRouting,
 }
 
 func main() {
-	configFile, err := os.Open("studio_config.json")
+	cmd, args := "plan", os.Args[1:]
+	if len(args) > 0 {
+		cmd, args = args[0], args[1:]
+	}
+	run, ok := commands[cmd]
+	if !ok {
+		fmt.Println("usage: studio-map [plan [-v] | apply | routing [--stems] | restore <state/snapshot.json>]")
+		os.Exit(2)
+	}
+	if err := run(args); err != nil {
+		fmt.Printf("❌ %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// newClient avoids keep-alive: MOTU devices send a stray CRLF after 204 replies.
+func newClient() *http.Client {
+	return &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{DisableKeepAlives: true}}
+}
+
+func loadConfig(path string) (Config, error) {
+	var cfg Config
+	data, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Printf("❌ Failed to open configuration file: %v\n", err)
-		return
+		return cfg, err
 	}
-	defer configFile.Close()
-
-	byteValue, _ := io.ReadAll(configFile)
-	var config Config
-	if err := json.Unmarshal(byteValue, &config); err != nil {
-		fmt.Printf("❌ Failed to parse configuration JSON: %v\n", err)
-		return
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return cfg, fmt.Errorf("parse %s: %w", path, err)
 	}
+	return cfg, nil
+}
 
-	// Replace your existing name allocation loop inside main() with this adaptive generation logic:
-
-	client := &http.Client{Timeout: 2 * time.Second}
-	logicInputs := make(map[int]string)
-
-	fmt.Println("🔍 Scanning studio network endpoints for dynamic hardware profiling...")
-
-	for _, alloc := range config.Allocations {
-		baseURL, exists := config.Devices[alloc.Device]
-		if !exists {
+func readLive(client *http.Client, cfg Config) Live {
+	live := Live{Datastores: map[string]Datastore{}, Presets: loadPresets(cmp.Or(cfg.PresetDir, defaultPresetDir))}
+	for _, dev := range sortedKeys(cfg.Devices) {
+		url := cfg.Devices[dev]
+		if url == "" {
 			continue
 		}
-
-		// Dynamic Sniffing Probe Executed Here
-		gen := SniffInterfaceArchitecture(client, baseURL)
-		fmt.Printf("📡 Device [%s] at %s identified as: %s\n", strings.ToUpper(alloc.Device), baseURL, gen)
-
-		switch gen {
-		case Gen2015Legacy:
-			// Execute the custom naming algorithms we wrote for the 2015 Datastore REST tree
-			if alloc.Pattern != "" {
-				count := 1
-				for i := alloc.StartChannel; i <= alloc.EndChannel; i++ {
-					name := fmt.Sprintf(alloc.Pattern, count)
-					pushMOTUName(client, baseURL, alloc.Device, i, name)
-					trackLogicInput(alloc.Device, i, name, logicInputs)
-					count++
-				}
-			}
-			if alloc.Channels != nil {
-				for chStr, name := range alloc.Channels {
-					ch, _ := strconv.Atoi(chStr)
-					pushMOTUName(client, baseURL, alloc.Device, ch, name)
-					trackLogicInput(alloc.Device, ch, name, logicInputs)
-				}
-			}
-
-		case Gen2025Milan:
-			// 2025 devices process routing and internal naming via CueMix Pro metadata mapping.
-			// Instead of writing to their internal hardware registers (which are unneeded here since they stay open),
-			// we skip the network payload overhead entirely but STILL register them to our Logic track template!
-			fmt.Printf("ℹ️ Skipping hardware flash mutation for %s (Maintained as transparent digital network passthrough)\n", alloc.Device)
-
-			if alloc.Channels != nil {
-				for chStr, name := range alloc.Channels {
-					ch, _ := strconv.Atoi(chStr)
-					trackLogicInput(alloc.Device, ch, name, logicInputs)
-				}
-			}
-
-
-		case GenUnknown:
-			fmt.Printf("❌ Critical Network Failure: Target device [%s] did not respond to fingerprint checks.\n", alloc.Device)
-			fmt.Println("🛑 Aborting installation sequence. Ensure hardware is online and dialable.")
-			os.Exit(1) // Force the compiled binary to exit with a non-zero system error code
-		}
-	}
-
-	// 2. Process Hardware Stereo Pairing Configurations
-	for dev, pairs := range config.StereoPairs {
-		baseURL, exists := config.Devices[dev]
-		if !exists {
+		ds, err := fetchDatastore(client, url)
+		if err != nil {
+			fmt.Printf("⚠️  %s unreachable (%v)\n", dev, err)
 			continue
 		}
-		for _, pair := range pairs {
-			pushMOTUStereoState(client, baseURL, dev, pair.LeftChannel, pair.Paired)
-		}
+		fmt.Printf("📡 %s: read %d datastore keys\n", dev, len(ds))
+		live.Datastores[dev] = ds
 	}
-
-	// 3. Generate Logic Pro Native I/O XML Data
-	generateLogicXML(logicInputs)
-	// Read the active configuration payload to print your visual mix architecture
-	rawBytes, err := os.ReadFile("studio_config.json")
-	if err == nil {
-		GenerateConsoleBlueprint(rawBytes)
+	if names, err := hostInNames(cfg.HostDevice); err == nil {
+		fmt.Printf("🎧 %s: read %d CoreAudio input names\n", cfg.HostDevice, len(names))
+		live.HostNames = names
 	}
-
-	fmt.Println("\n🏁 Automation engine sequence successfully executed.")
+	return live
 }
 
-func pushMOTUName(client *http.Client, baseURL string, device string, ch int, name string) {
-	// sanitize name
-	cleanName := SanitizeHardwareName(name)
+type session struct {
+	cfg    Config
+	inputs []Input
+	client *http.Client
+	live   Live
+	plan   Plan
+}
 
-	// Path mapping explicitly interacts with MOTU's local datastore node tree
-	url := fmt.Sprintf("%s/ext/mix/chan/%d/name", baseURL, ch)
-	payload := []byte(fmt.Sprintf("value=%s", cleanName))
-
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(payload))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := client.Do(req)
+func newSession() (*session, error) {
+	cfg, err := loadConfig(configPath)
 	if err != nil {
-		fmt.Printf("⚠️ Network communication timeout: %s Channel %d\n", device, ch)
-		return
+		return nil, err
 	}
-	defer resp.Body.Close()
-	fmt.Printf("✅ Mapped [%s] Input %02d ➡️ \"%s\"\n", strings.ToUpper(device), ch+1, cleanName)
-}
-
-func pushMOTUStereoState(client *http.Client, baseURL string, device string, leftCh int, paired bool) {
-	url := fmt.Sprintf("%s/ext/mix/chan/%d/stereo", baseURL, leftCh)
-	val := "0"
-	if paired {
-		val = "1"
-	}
-	payload := []byte(fmt.Sprintf("value=%s", val))
-
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(payload))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := client.Do(req)
+	inputs, err := LoadSheet(sheetPath, cfg)
 	if err != nil {
-		return
+		return nil, err
 	}
-	defer resp.Body.Close()
-	fmt.Printf("🔗 Set Stereo Link: [%s] Channels %d-%d State ➡️ %t\n", strings.ToUpper(device), leftCh+1, leftCh+2, paired)
+	s := &session{cfg: cfg, inputs: inputs, client: newClient()}
+	s.live = readLive(s.client, cfg)
+	s.plan = buildPlan(cfg, inputs, s.live)
+	return s, nil
 }
 
-func trackLogicInput(device string, ch int, name string, matrix map[int]string) {
-	// Reconstructs your fixed 40-Channel network map layout into Logic tracking slices
-	offset := 0
-	switch device {
-	case "16a":
-		offset = 1 // 16A occupies DAW 1-16
-	case "24ai":
-		offset = 17 // 24Ai occupies DAW 17-40
-	default:
-		return
+func runPlan(args []string) error {
+	s, err := newSession()
+	if err != nil {
+		return err
 	}
-	dawChannel := offset + ch
-	matrix[dawChannel] = name
+	printPlan(s.plan, len(args) > 0 && args[0] == "-v")
+	GenerateConsoleBlueprint(buildMixGraph(s.cfg, s.inputs, s.live.Presets))
+	return nil
 }
 
-func generateLogicXML(matrix map[int]string) {
-	var sb strings.Builder
-	sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-	sb.WriteString("<ProChannelNames>\n")
-
-	for i := 1; i <= 48; i++ {
-		name, customized := matrix[i]
-		if !customized {
-			// Reserve the unburdened 10Pre local hardware preamps at the tail end
-			if i >= 41 {
-				name = fmt.Sprintf("10Pre_Local_Pre_%d", i-40)
-			} else {
-				continue
+// runRouting prints the Logic build sheet. It needs only the sheet, config and presets, not the rack.
+func runRouting(args []string) error {
+	cfg, err := loadConfig(configPath)
+	if err != nil {
+		return err
+	}
+	inputs, err := LoadSheet(sheetPath, cfg)
+	if err != nil {
+		return err
+	}
+	presets := loadPresets(cmp.Or(cfg.PresetDir, defaultPresetDir))
+	g := buildMixGraph(cfg, inputs, presets)
+	if len(args) > 0 && args[0] == "--stems" {
+		known := g.Nodes
+		stems := stemInputs(cfg)
+		g = buildMixGraph(cfg, stems, presets)
+		g.Partial = true
+		g.pruneEmptyStacks()
+		for _, in := range stems {
+			if known[in.Stack] == nil {
+				fmt.Printf("  ⚠️  %s: stack %q is not in the sheet or mix config\n", in.Source, in.Stack)
 			}
 		}
-		sb.WriteString(fmt.Sprintf("  <ChannelName index=\"%d\">%s</ChannelName>\n", i, name))
 	}
-	sb.WriteString("</ProChannelNames>\n")
+	printRouting(g, presets)
+	for _, pr := range validateMix(g, presets) {
+		fmt.Printf("  ⚠️  %s: %s\n", pr[0], pr[1])
+	}
+	GenerateConsoleBlueprint(g)
+	return nil
+}
 
-	err := os.WriteFile("MOTU_Studio_Labels.prochannelnames", []byte(sb.String()), 0644)
+func runApply(args []string) error {
+	s, err := newSession()
 	if err != nil {
-		fmt.Printf("❌ Failed to compile Logic XML export file: %v\n", err)
-		return
+		return err
 	}
-	fmt.Println("\n💾 Compiled Apple Logic Pro metadata file: 'MOTU_Studio_Labels.prochannelnames'")
+	printPlan(s.plan, false)
+
+	for _, dev := range sortedKeys(s.plan.Writes) {
+		writes := s.plan.Writes[dev]
+		url := s.cfg.Devices[dev]
+		snap, err := saveSnapshot(stateDir, dev, url, s.live.Datastores[dev])
+		if err != nil {
+			return fmt.Errorf("snapshot %s: %w", dev, err)
+		}
+		fmt.Printf("\n💾 %s snapshot: %s\n", dev, snap)
+		if err := writeKeys(s.client, url, writes); err != nil {
+			return fmt.Errorf("write %s: %w", dev, err)
+		}
+		if err := verifyWrites(s.client, url, writes); err != nil {
+			return fmt.Errorf("verify %s: %w", dev, err)
+		}
+		fmt.Printf("✅ %s: %d input names written and verified\n", dev, len(writes))
+	}
+
+	if n := s.plan.count(StatusManual); n > 0 {
+		fmt.Printf("\n✋ %d items to do by hand in CueMix/Logic (see ✋ rows above).\n", n)
+	}
+	return nil
+}
+
+func runRestore(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: studio-map restore <state/snapshot.json>")
+	}
+	snap, err := loadSnapshot(args[0])
+	if err != nil {
+		return err
+	}
+	cfg, err := loadConfig(configPath)
+	if err != nil {
+		return err
+	}
+	url := cfg.Devices[snap.Device]
+	if url == "" {
+		url = snap.URL
+	}
+	client := newClient()
+	ds, err := fetchDatastore(client, url)
+	if err != nil {
+		return fmt.Errorf("%s unreachable: %w", snap.Device, err)
+	}
+	diff := changedNames(ds, snap.Names)
+	if err := writeKeys(client, url, diff); err != nil {
+		return err
+	}
+	if err := verifyWrites(client, url, diff); err != nil {
+		return err
+	}
+	fmt.Printf("⏪ %s: restored %d input names from %s\n", snap.Device, len(diff), snap.Taken.Format(time.RFC3339))
+	return nil
+}
+
+func verifyWrites(client *http.Client, url string, writes map[string]string) error {
+	ds, err := fetchDatastore(client, url)
+	if err != nil {
+		return err
+	}
+	if diff := changedNames(ds, writes); len(diff) > 0 {
+		return fmt.Errorf("%d names did not stick: %v", len(diff), sortedKeys(diff))
+	}
+	return nil
 }
 
 // SanitizeHardwareName cleans strings to prevent MOTU hardware internal errors
 func SanitizeHardwareName(rawName string) string {
-	// 1. Replace spaces with underscores
 	spaced := strings.ReplaceAll(rawName, " ", "_")
 
-	// 2. Filter out non-alphanumeric/non-standard characters natively
 	sanitized := strings.Map(func(r rune) rune {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-' {
 			return r
 		}
-		return -1 // Drops the character completely
+		return -1
 	}, spaced)
 
-	// 3. Enforce legacy hardware string length limit (31 chars max)
 	if len(sanitized) > 31 {
 		return sanitized[:31]
 	}
 	return sanitized
 }
-

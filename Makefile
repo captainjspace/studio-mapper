@@ -1,20 +1,15 @@
 # Updated Go Studio Automation Makefile
 BINARY_NAME=studio-map
 INSTALL_DIR=$(HOME)/.local/bin
-LOGIC_DIR=$(HOME)/Library/Preferences/Logic
 
-.PHONY: all test test-harness build install deploy clean
+.PHONY: all test build install plan routing deploy clean
 
 # 1. Default Target: Builds the tool and sets up path links (Safe offline)
-all: test test-harness build install
+all: test build install
 
 test:
 	@echo "🧪 Running full project verification test suite..."
 	go test -v ./...
-
-test-harness:
-	@echo "📦 Validating XML template hydration isolation rules..."
-	go test -v -run TestDeclarativeTemplateHydration
 
 build:
 	@echo "🏗️  Compiling native binary: $(BINARY_NAME)..."
@@ -27,16 +22,17 @@ install:
 	cp $(BINARY_NAME) $(INSTALL_DIR)/$(BINARY_NAME)
 	@echo "🏁 Local compilation complete. Call '$(BINARY_NAME)' from any terminal workspace."
 
-# 3. Live Configuration Deployment: Pushes changes to the rack (Fails if network is down)
+# 3. Read the rack and show what would change (read-only)
+plan: build
+	@./$(BINARY_NAME) plan
+
+# 4. Logic build sheet: tracks, stacks, buses, sends, presets (no rack needed)
+routing: build
+	@./$(BINARY_NAME) routing
+
+# 5. Live Configuration Deployment: snapshots to state/, writes changed names, verifies
 deploy: build
-	@echo "🔍 Scanning studio network endpoints for dynamic hardware profiling..."
-	@mkdir -p $(LOGIC_DIR)
-	@./$(BINARY_NAME) || (echo "❌ Deployment aborted: Physical network hardware is unreachable." && exit 1)
-	@if [ -f "MOTU_Studio_Labels.prochannelnames" ]; then \
-		cp MOTU_Studio_Labels.prochannelnames $(LOGIC_DIR)/MOTU_Studio_Labels.prochannelnames; \
-		echo "🍎 Logic Pro mapping metadata updated successfully."; \
-		fi
-	@echo "🎉 Complete live deployment successful."
+	@./$(BINARY_NAME) apply
 
 clean:
 	@echo "🧹 Purging transient testing output structures..."

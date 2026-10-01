@@ -2,157 +2,189 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
-// SpyStore captures incoming datastore payloads from the runtime engine
-type SpyStore struct {
-	mu          sync.Mutex
-	Names       map[string]string
-	StereoLinks map[string]string
+// fakeMOTU serves a MOTU AVB datastore: GET /datastore returns every key, POST json={...} sets keys.
+type fakeMOTU struct {
+	mu sync.Mutex
+	ds Datastore
 }
 
-func NewSpyStore() *SpyStore {
-	return &SpyStore{
-		Names:       make(map[string]string),
-		StereoLinks: make(map[string]string),
-	}
-}
-
-func TestStudioAutomationEngine(t *testing.T) {
-	// 1. Spin up a thread-safe state interceptor
-	spy := NewSpyStore()
-
-	// 2. Mock Server: Mimics the live REST API routing layout of the MOTU hardware
-	mockHardwareRouter := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Fatalf("Failed to read mocked request payload: %v", err)
-		}
-		defer r.Body.Close()
-
-		payload := string(body)
-		path := r.URL.Path
-
-		spy.mu.Lock()
-		defer spy.mu.Unlock()
-
-		// Dissect the URI nodes exactly how the MOTU hardware reads them
-		if strings.HasSuffix(path, "/name") {
-			spy.Names[path] = strings.TrimPrefix(payload, "value=")
-			w.WriteHeader(http.StatusOK)
-			return
-		} else if strings.HasSuffix(path, "/stereo") {
-			spy.StereoLinks[path] = strings.TrimPrefix(payload, "value=")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
+func (f *fakeMOTU) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r.URL.Path != "/datastore" {
 		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer mockHardwareRouter.Close() // Clean up when the test lifecycle ends
-
-	// 3. Inject our transient test configurations into memory
-	testConfig := Config{
-		Devices: map[string]string{
-			"16a":  mockHardwareRouter.URL, // Redirect the network call to our local harness
-			"24ai": mockHardwareRouter.URL,
-		},
-		StereoPairs: map[string][]Pair{
-			"24ai": {
-				{LeftChannel: 8, Paired: true},
-			},
-		},
-		Allocations: []Allocation{
-			{
-				Device:       "16a",
-				StartChannel: 0,
-				EndChannel:   1,
-				Pattern:      "Test_Neve_%d",
-			},
-			{
-				Device: "24ai",
-				Channels: map[string]string{
-					"8": "Test_Fractal_L",
-				},
-			},
-		},
+		return
 	}
-
-	// Dump test config to a temporary disk location for file validation
-	configBytes, _ := json.Marshal(testConfig)
-	_ = os.WriteFile("studio_config_test.json", configBytes, 0644)
-
-	// Clean up environment variables and build artifacts after testing runs
-	defer func() {
-		_ = os.Remove("studio_config_test.json")
-		_ = os.Remove("MOTU_Studio_Labels.prochannelnames")
-	}()
-
-	// 4. Execute the runtime engine under test conditions
-	client := &http.Client{Timeout: 1 * time.Second}
-	logicInputs := make(map[int]string)
-
-	for _, alloc := range testConfig.Allocations {
-		baseURL := testConfig.Devices[alloc.Device]
-		if alloc.Pattern != "" {
-			count := 1
-			for i := alloc.StartChannel; i <= alloc.EndChannel; i++ {
-				name := "Test_Neve_" + strings.TrimSuffix(alloc.Pattern, "Test_Neve_%d") // simplified string creation for test
-				pushMOTUName(client, baseURL, alloc.Device, i, name)
-				trackLogicInput(alloc.Device, i, name, logicInputs)
-				count++
-			}
+	if r.Method == http.MethodPost {
+		var set map[string]string
+		if err := json.Unmarshal([]byte(r.FormValue("json")), &set); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
 		}
-		if alloc.Channels != nil {
-			for chStr, name := range alloc.Channels {
-				var ch int
-				if chStr == "8" { ch = 8 }
-				pushMOTUName(client, baseURL, alloc.Device, ch, name)
-				trackLogicInput(alloc.Device, ch, name, logicInputs)
-			}
+		for k, v := range set {
+			f.ds[k] = v
 		}
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
-
-	for dev, pairs := range testConfig.StereoPairs {
-		baseURL := testConfig.Devices[dev]
-		for _, pair := range pairs {
-			pushMOTUStereoState(client, baseURL, dev, pair.LeftChannel, pair.Paired)
-		}
-	}
-
-	generateLogicXML(logicInputs)
-
-	// 5. Assertions: Verify data mutations match your design expectations
-	t.Run("Verify Name Datastore Nodes", func(t *testing.T) {
-		// The sanitizer converts the raw request path block safely
-		expectedPath := "/ext/mix/chan/8/name"
-		expectedValue := "Test_Fractal_L" // Alphanumeric with underscores passes right through
-
-		if val, exists := spy.Names[expectedPath]; !exists || val != expectedValue {
-			t.Errorf("Expected path %q to have value %q, got value %q", expectedPath, expectedValue, val)
-		}
-	})
-	t.Run("Verify Stereo Link Payloads", func(t *testing.T) {
-		expectedPath := "/ext/mix/chan/8/stereo"
-		expectedValue := "1" // "1" maps explicitly to paired=true inside the hardware engine
-
-		if val, exists := spy.StereoLinks[expectedPath]; !exists || val != expectedValue {
-			t.Errorf("Stereo link configuration payload mismatch. Expected %q at %q, got %q", expectedValue, expectedPath, val)
-		}
-	})
-
-	t.Run("Verify Logic XML File Output Creation", func(t *testing.T) {
-		if _, err := os.Stat("MOTU_Studio_Labels.prochannelnames"); os.IsNotExist(err) {
-			t.Errorf("Logic Pro native configuration artifact was not successfully written to the filesystem.")
-		}
-	})
+	_ = json.NewEncoder(w).Encode(f.ds)
 }
 
+const (
+	uid16a   = "0001f2fffe0011e5"
+	uid10pre = "0001f2fffefe96ae"
+)
+
+func newFake16A(streamTalkers ...string) *fakeMOTU {
+	ds := Datastore{
+		"uid":                              uid16a,
+		"ext/ibank/0/name":                 "Analog",
+		"ext/ibank/1/name":                 "ADAT A",
+		"avb/" + uid10pre + "/entity_name": "10pre",
+	}
+	for ch := 0; ch < 16; ch++ {
+		ds[inputNamePath(0, ch+1)] = ""
+	}
+	for i, t := range streamTalkers {
+		ds[fmtTalkerKey(i)] = t
+	}
+	return &fakeMOTU{ds: ds}
+}
+
+func fmtTalkerKey(i int) string {
+	return "avb/" + uid10pre + "/cfg/0/input_streams/" + string(rune('0'+i)) + "/talker"
+}
+
+func testConfig(url string) Config {
+	return Config{
+		Devices:    map[string]string{"16a": url, "10pre": ""},
+		Interfaces: map[string]string{"Motu 16A": "16a"},
+		HostDevice: "10pre",
+		HostInputs: []HostInput{{Device: "16a", Bank: "Analog", Count: 16, HostStart: 1, AVBStream: 1}},
+	}
+}
+
+var testInputs = []Input{
+	{Row: 2, Device: "16a", Bank: "Analog", Ch: 5, HostIn: 5, Label: "Kick_In", Stack: "drums/kick", Active: true},
+	{Row: 3, Device: "16a", Bank: "Analog", Ch: 6, HostIn: 6, Label: "Snare_Top", Stack: "drums/snare", Active: true},
+	{Row: 4, Device: "16a", Bank: "Analog", Ch: 16, HostIn: 16, Label: "Spare", Active: false},
+}
+
+func TestPlanApplyRestore(t *testing.T) {
+	fake := newFake16A(uid16a+":0", uid16a+":1")
+	srv := httptest.NewServer(fake)
+	defer srv.Close()
+	client := &http.Client{Timeout: time.Second}
+	cfg := testConfig(srv.URL)
+
+	read := func() Live {
+		ds, err := fetchDatastore(client, srv.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return Live{Datastores: map[string]Datastore{"16a": ds}, HostNames: []string{"Host In 1", "Host In 2", "Host In 3", "Host In 4", "Kick_In", "Host In 6"}}
+	}
+
+	before := read()
+	p := buildPlan(cfg, testInputs, before)
+	if got := p.count(StatusChange); got != 2 {
+		t.Fatalf("want 2 changes (inactive row skipped), got %d: %+v", got, p.Steps)
+	}
+	if got := p.count(StatusManual); got != 1 {
+		t.Errorf("want 1 manual Host In rename (Host In 6), got %d", got)
+	}
+	if got := p.count(StatusOK); got != 3 {
+		t.Errorf("want 2 streams + Host In 5 ok, got %d ok", got)
+	}
+
+	snapPath, err := saveSnapshot(t.TempDir(), "16a", srv.URL, before.Datastores["16a"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeKeys(client, srv.URL, p.Writes["16a"]); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyWrites(client, srv.URL, p.Writes["16a"]); err != nil {
+		t.Fatal(err)
+	}
+	if got := fake.ds[inputNamePath(0, 5)]; got != "Kick_In" {
+		t.Errorf("Analog 5 = %q, want Kick_In", got)
+	}
+
+	if again := buildPlan(cfg, testInputs, read()); again.count(StatusChange) != 0 {
+		t.Errorf("plan after apply should be clean, got %+v", again.Writes)
+	}
+
+	snap, err := loadSnapshot(snapPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeKeys(client, srv.URL, changedNames(read().Datastores["16a"], snap.Names)); err != nil {
+		t.Fatal(err)
+	}
+	if got := fake.ds[inputNamePath(0, 5)]; got != "" {
+		t.Errorf("restore should blank Analog 5, got %q", got)
+	}
+}
+
+func TestPlanFlagsDisconnectedStream(t *testing.T) {
+	fake := newFake16A(uid16a+":0", "0000000000000000:0")
+	srv := httptest.NewServer(fake)
+	defer srv.Close()
+	ds, _ := fetchDatastore(&http.Client{Timeout: time.Second}, srv.URL)
+
+	p := buildPlan(testConfig(srv.URL), nil, Live{Datastores: map[string]Datastore{"16a": ds}})
+	var manual []Step
+	for _, s := range p.Steps {
+		if s.Status == StatusManual {
+			manual = append(manual, s)
+		}
+	}
+	if len(manual) != 1 || manual[0].Target != "Input Stream 2" || manual[0].Current != "(not connected)" {
+		t.Errorf("want Input Stream 2 flagged as not connected, got %+v", manual)
+	}
+}
+
+func TestPlanSurvivesOfflineDevice(t *testing.T) {
+	cfg := testConfig("http://127.0.0.1:1")
+	live := readLive(&http.Client{Timeout: 200 * time.Millisecond}, cfg)
+	p := buildPlan(cfg, testInputs, live)
+	if p.count(StatusChange) != 0 || len(p.Writes) != 0 {
+		t.Errorf("offline device must produce no writes, got %+v", p.Writes)
+	}
+	found := false
+	for _, s := range p.Steps {
+		found = found || (s.Status == StatusWarn && strings.Contains(s.Desired, "offline"))
+	}
+	if !found {
+		t.Error("expected an offline warning")
+	}
+}
+
+func TestPlanValidation(t *testing.T) {
+	cfg := testConfig("")
+	inputs := []Input{
+		{Row: 2, HostIn: 5, Label: "A", Stack: "drums", Active: true},
+		{Row: 3, HostIn: 5, Label: "B", Stack: "drums", Active: true},
+		{Row: 4, HostIn: 0, Label: "Bass_Direct", Source: "Motu 16A O1", Active: true},
+	}
+	p := buildPlan(cfg, inputs, Live{})
+	var warns []string
+	for _, s := range p.Steps {
+		if s.Status == StatusWarn && s.Scope == "sheet" {
+			warns = append(warns, s.Desired)
+		}
+	}
+	want := []string{"Bass_Direct: not routed to the host", "B: duplicate Host In"}
+	if strings.Join(warns, "|") != strings.Join(want, "|") {
+		t.Errorf("warnings = %q, want %q", warns, want)
+	}
+}
