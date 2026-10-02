@@ -8,7 +8,8 @@
 - **Run:** `studio-map plan` (read-only) · `studio-map apply` · `studio-map restore <snapshot>` · `studio-map routing [--stems] [--json]` · `studio-map inputs` · `studio-map serve`
 - **Test:** `make test` (`go test ./...`)
 - **Lint:** `go vet ./...` and `gofmt -l .` (must print nothing)
-- **Container / cluster:** `make image push k8s-deploy` (podman → microk8s registry on mozartsbutterfly, NodePort 30180)
+- **Container:** `make nuc-deploy` (always-on host: rootless podman quadlet on amazing-kitty, http://amazing-kitty.landmania.internal:8080; image goes over ssh since the NUC can't reach the VLAN 80 registry)
+- **Cluster:** `make image push k8s-deploy` (microk8s on mozartsbutterfly, NodePort 30180; blocked while its containerd NVIDIA drop-in breaks image unpacking)
 
 ## Code Style & Guidelines
 - **Language/Stack:** go, json

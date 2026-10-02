@@ -2,13 +2,15 @@
 BINARY_NAME=studio-map
 REGISTRY ?= mozartsbutterfly.landmania.internal:32000
 KUBE_CONTEXT ?= microk8s
+NUC ?= amazing-kitty.landmania.internal
+NUC_DATA = .local/share/studio-map
 IMAGE = $(REGISTRY)/studio-map:latest
 PRESET_LIBRARY = $(HOME)/Music/Audio Music Apps
 # podman's own auth only: ~/.docker/config.json has a gcloud helper that fails non-interactively
 export REGISTRY_AUTH_FILE := $(HOME)/.config/containers/auth.json
 INSTALL_DIR=$(HOME)/.local/bin
 
-.PHONY: all test build install plan routing docs presets-index image push k8s-deploy publish deploy clean
+.PHONY: all test build install plan routing docs presets-index image push k8s-deploy nuc-deploy publish deploy clean
 
 # 1. Default Target: Builds the tool and sets up path links (Safe offline)
 all: test build install
@@ -63,6 +65,16 @@ k8s-deploy:
 	kubectl --context $(KUBE_CONTEXT) -n studio-map rollout restart deployment/studio-map
 	kubectl --context $(KUBE_CONTEXT) -n studio-map rollout status deployment/studio-map --timeout=120s
 	@echo "📖 http://mozartsbutterfly.landmania.internal:30180"
+
+# The NUC can't reach the VLAN 80 registry, so the image goes over ssh
+nuc-deploy: image
+	podman save $(IMAGE) | ssh $(NUC) 'podman load && podman tag $(IMAGE) localhost/studio-map:latest'
+	ssh $(NUC) 'mkdir -p $(NUC_DATA)/data .config/containers/systemd'
+	scp studio_config.json $(NUC):$(NUC_DATA)/
+	scp data/studio-inputs.csv data/home-inputs.csv data/presets.txt $(NUC):$(NUC_DATA)/data/
+	scp deploy/studio-map.container $(NUC):.config/containers/systemd/
+	ssh $(NUC) 'systemctl --user daemon-reload && systemctl --user restart studio-map'
+	@echo "📖 http://$(NUC):8080"
 
 publish: image push k8s-deploy
 
