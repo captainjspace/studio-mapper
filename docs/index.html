@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studio Map</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .pointer-box { transition: all 0.3s ease; }
+        .pointer-box:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0,0,0,.1); }
+        .code-block { background:#1e293b; color:#e2e8f0; font-family: ui-monospace, Menlo, monospace; }
+        .active-nav { border-left-color:#3b82f6; background:#292524; color:#fff; }
+    </style>
+</head>
+<body class="bg-stone-50 text-stone-800 font-sans antialiased min-h-screen md:flex">
+
+<nav class="md:w-64 bg-stone-900 text-stone-300 md:min-h-screen md:sticky top-0">
+    <div class="p-6 border-b border-stone-800">
+        <h1 class="text-2xl font-bold text-white tracking-tight">Studio Map</h1>
+        <p class="text-xs text-stone-500 mt-2">Logic and MOTU management</p>
+    </div>
+    <ul id="nav" class="py-4"></ul>
+    <div id="rig-picker" class="hidden px-6 pb-4 text-sm">
+        <label class="block text-xs text-stone-500 mb-1">Location</label>
+        <select id="rig" class="w-full bg-stone-800 text-white rounded p-2"></select>
+    </div>
+    <div id="generated" class="p-6 border-t border-stone-800 text-xs text-stone-500"></div>
+</nav>
+
+<main class="flex-1 p-4 md:p-8 space-y-8 min-w-0">
+
+    <div id="no-data" class="hidden bg-amber-50 border-l-4 border-amber-500 p-6 rounded-r-xl">
+        <h3 class="font-bold text-amber-900">No studio data yet</h3>
+        <p class="text-amber-800">Run <code>make docs</code> in the repo to generate <code>docs/studio-data.js</code>, then reload.</p>
+    </div>
+
+    <div id="warnings"></div>
+
+    <section id="overview" class="section space-y-6">
+        <header>
+            <h2 class="text-3xl font-bold text-stone-900 mb-2">Terraform your studio</h2>
+            <p class="text-lg text-stone-600 max-w-3xl">
+                A declarative studio config: the sheet says what is plugged in where, <code>studio-map</code> reads the
+                MOTU rack, shows what is different (<code>plan</code>), and fixes what it can (<code>apply</code>).
+            </p>
+        </header>
+        <div id="cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+        <div class="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-r-xl">
+            <h4 class="font-bold text-blue-900 mb-2">Logic isn't marshallable</h4>
+            <p class="text-blue-800">
+                Logic projects are binary and Logic has no scripting API, so the mix side is a build sheet:
+                the Routing view below is what the template should look like. CueMix routing inside the 10pre
+                is the other hand-done layer.
+            </p>
+        </div>
+    </section>
+
+    <section id="inputs" class="section space-y-4">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+            <div>
+                <h2 class="text-2xl font-bold text-stone-900">Inputs</h2>
+                <p class="text-stone-600">Every recorded input: who, what, mic, preamp, patch point and stack.</p>
+            </div>
+            <input id="filter" type="search" placeholder="Filter (musician, mic, stack…)"
+                   class="p-2 border border-stone-300 rounded text-sm w-72">
+        </div>
+        <div class="overflow-x-auto bg-white rounded-xl border border-stone-200">
+            <table class="w-full text-sm text-left">
+                <thead id="inputs-head" class="bg-stone-100 text-stone-700 uppercase text-xs tracking-wider"></thead>
+                <tbody id="inputs-body" class="divide-y divide-stone-100"></tbody>
+            </table>
+        </div>
+        <div id="not-recorded" class="text-sm text-stone-500"></div>
+    </section>
+
+    <section id="routing" class="section space-y-4">
+        <h2 class="text-2xl font-bold text-stone-900">Routing</h2>
+        <p class="text-stone-600">Signal flow from the output back to every track, as the Logic template should be built.</p>
+        <div id="tree" class="bg-white rounded-xl border border-stone-200 p-6 font-mono text-sm overflow-x-auto"></div>
+    </section>
+
+    <section id="commands" class="section space-y-4">
+        <h2 class="text-2xl font-bold text-stone-900">Commands</h2>
+        <div id="commands-table" class="bg-white rounded-xl border border-stone-200 overflow-hidden"></div>
+        <p class="text-sm text-stone-600">
+            The config is found from any directory: <code>--config</code>, <code>$STUDIO_MAP_CONFIG</code>,
+            <code>studio_config.json</code> here or in a parent folder, then <code>~/.config/studio-map/</code>
+            (linked by <code>make install</code>). The sheet path comes from <code>"sheet"</code> in the config, or <code>--sheet</code>.
+        </p>
+    </section>
+
+    <section id="scripts" class="section space-y-4">
+        <h2 class="text-2xl font-bold text-stone-900">Scripts</h2>
+        <div id="scripts-table" class="bg-white rounded-xl border border-stone-200 overflow-hidden"></div>
+    </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const cls = {
+    th: "px-4 py-3 font-semibold",
+    td: "px-4 py-2 align-top",
+    badge: "inline-block px-2 py-0.5 rounded text-xs font-semibold mr-2",
+    card: "bg-white p-6 rounded-xl shadow-sm border border-stone-200 pointer-box cursor-pointer",
+    nav: "w-full text-left px-6 py-3 hover:bg-stone-800 hover:text-white flex items-center border-l-4 border-transparent",
+};
+const kindColor = { output: "bg-purple-100 text-purple-800", aux: "bg-amber-100 text-amber-800", stack: "bg-blue-100 text-blue-800" };
+
+const sections = [
+    ["overview", "fa-home", "Overview"],
+    ["inputs", "fa-microphone", "Inputs"],
+    ["routing", "fa-sitemap", "Routing"],
+    ["commands", "fa-terminal", "Commands"],
+    ["scripts", "fa-scroll", "Scripts"],
+];
+
+function show(id) {
+    document.querySelectorAll(".section").forEach((s) => s.classList.toggle("hidden", s.id !== id));
+    document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("active-nav", b.dataset.id === id));
+    history.replaceState(null, "", "#" + id);
+}
+
+$("nav").innerHTML = sections.map(([id, icon, label]) =>
+    `<li><button data-id="${id}" class="${cls.nav}"><i class="fas ${icon} w-6"></i> ${label}</button></li>`).join("");
+$("nav").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) show(b.dataset.id); });
+
+// table renders a header + rows from [label, valueFn] column specs
+function table(columns, rows) {
+    return `<table class="w-full text-sm text-left">
+        <thead class="bg-stone-100 text-stone-700 uppercase text-xs tracking-wider"><tr>${columns.map(([h]) => `<th class="${cls.th}">${h}</th>`).join("")}</tr></thead>
+        <tbody class="divide-y divide-stone-100">${rows.map((r) => `<tr>${columns.map(([, f]) => `<td class="${cls.td}">${f(r)}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table>`;
+}
+
+$("commands-table").innerHTML = table([["Command", (r) => `<code>${r[0]}</code>`], ["What it does", (r) => r[1]]], [
+    ["studio-map plan [-v]", "Read the sheet, the 16A/24Ai, the 10pre AVB streams and CoreAudio names; show what differs. Read-only."],
+    ["studio-map apply", "Snapshot to <code>state/</code>, write changed input names to the 16A/24Ai, verify by re-reading."],
+    ["studio-map restore &lt;snapshot&gt;", "Put names back from a snapshot in <code>state/</code>."],
+    ["studio-map routing [--stems] [--json]", "Logic build sheet and signal-flow tree; <code>--stems</code> for Stem Splitter songs, <code>--json</code> for this page and the band app."],
+    ["make docs", "Regenerate <code>docs/studio-data.js</code> for this page."],
+]);
+
+$("scripts-table").innerHTML = table([["Script", (r) => `<code>${r[0]}</code>`], ["What it does", (r) => r[1]]], [
+    ["script/templates.zsh save|restore|list", "Archive Logic templates as verified brotli files in <code>templates/</code>, restore them, list what is where."],
+    ["script/check_motu_software.zsh", "Inventory MOTU apps, drivers, CoreAudio devices and 10pre state."],
+]);
+
+function render(data) {
+    if (!data) {
+        $("no-data").classList.remove("hidden");
+    } else {
+        const tracks = [];
+        (function walk(node, path) {
+            const here = node.kind === "stack" ? [...path, node.name] : path;
+            (node.tracks || []).forEach((t) => tracks.push({ ...t, stack: here.join(" / ") }));
+            (node.children || []).forEach((c) => walk(c, here));
+        })(data.root, []);
+        tracks.sort((a, b) => (a.hostIn || 999) - (b.hostIn || 999));
+
+        $("generated").textContent = `Data: ${new Date(data.generated).toLocaleString()} (${data.rig ? data.rig + ", " : ""}${data.mode})`;
+
+        const cards = [
+            ["fa-microphone", "text-blue-500", tracks.length, "recorded inputs", "inputs"],
+            ["fa-layer-group", "text-emerald-500", countNodes(data.root, "stack"), "stacks", "routing"],
+            ["fa-sliders", "text-amber-500", countNodes(data.root, "aux"), "aux buses", "routing"],
+            ["fa-triangle-exclamation", "text-red-500", data.warnings.length, "warnings", "overview"],
+        ];
+        $("cards").innerHTML = cards.map(([icon, color, n, label, target]) =>
+            `<div class="${cls.card}" data-target="${target}"><div class="${color} mb-3 text-3xl"><i class="fas ${icon}"></i></div>
+             <div class="text-3xl font-bold">${n}</div><div class="text-stone-600">${label}</div></div>`).join("");
+        $("cards").addEventListener("click", (e) => { const c = e.target.closest("[data-target]"); if (c) show(c.dataset.target); });
+
+        if (data.warnings.length) {
+            $("warnings").innerHTML = `<div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl text-sm text-red-800">
+                ${data.warnings.map((w) => `<div><i class="fas fa-triangle-exclamation mr-2"></i><b>${esc(w.node)}</b>: ${esc(w.message)}</div>`).join("")}</div>`;
+        }
+
+        const columns = [
+            ["In", (t) => t.stem ? "Stem" : t.hostIn],
+            ["Track", (t) => `<b>${esc(t.label)}</b>`],
+            ["Who", (t) => esc(t.musician)],
+            ["Source", (t) => esc(t.source)],
+            ["Mic", (t) => esc(t.mic)],
+            ["Preamp", (t) => esc(t.preamp)],
+            ["Patch", (t) => esc(t.interface)],
+            ["Stack", (t) => esc(t.stack)],
+            ["Channel preset", (t) => esc(t.channelPreset)],
+        ];
+        $("inputs-head").innerHTML = `<tr>${columns.map(([h]) => `<th class="${cls.th}">${h}</th>`).join("")}</tr>`;
+        const renderRows = (q) => {
+            const needle = q.trim().toLowerCase();
+            const rows = tracks.filter((t) => !needle || Object.values(t).join(" ").toLowerCase().includes(needle));
+            $("inputs-body").innerHTML = rows.map((t) =>
+                `<tr class="hover:bg-stone-50">${columns.map(([, f]) => `<td class="${cls.td}">${f(t)}</td>`).join("")}</tr>`).join("");
+        };
+        $("filter").addEventListener("input", (e) => renderRows(e.target.value));
+        renderRows("");
+
+        if (data.notRecorded?.length) {
+            $("not-recorded").innerHTML = "Not recorded (hardware label only): " +
+                data.notRecorded.map((t) => `<code>${esc(t.label)}</code> In ${t.hostIn}`).join(", ");
+        }
+
+        const describe = (n) => [
+            n.bus ? `Bus ${n.bus}` : "",
+            n.pan != null ? `pan ${n.pan > 0 ? "+" : ""}${n.pan}` : "",
+            n.preset || n.plugin ? `⟵ ${esc(n.preset || n.plugin)}` : "",
+            n.insert ? `⏱ ${esc(n.insert.rig)}: send ${esc(n.insert.out)}, return ${esc(n.insert.in)}` : "",
+            ...(n.sends || []).map((s) => `⤳ ${esc(s.to)} ${s.level} dB`),
+        ].filter(Boolean).join(" · ");
+        const node = (n) => `<li class="my-1">
+            <span class="${cls.badge} ${kindColor[n.kind] || ""}">${n.kind}</span><b>${esc(n.name)}</b>
+            <span class="text-stone-500 ml-2">${describe(n)}</span>
+            <ul class="ml-6 border-l border-stone-200 pl-4">
+                ${(n.children || []).map(node).join("")}
+                ${(n.tracks || []).map((t) => `<li class="text-stone-600">${t.stem ? "Stem" : "In " + t.hostIn} ${esc(t.label)}</li>`).join("")}
+            </ul></li>`;
+        $("tree").innerHTML = `<ul>${node(data.root)}</ul>`;
+    }
+}
+
+function countNodes(n, kind) {
+    return (n.kind === kind ? 1 : 0) + (n.children || []).reduce((s, c) => s + countNodes(c, kind), 0);
+}
+
+// Data: served by `studio-map serve` (per rig) or from `make docs` (docs/studio-data.js, opened as a file).
+const rig = new URLSearchParams(location.search).get("rig");
+const served = location.protocol.startsWith("http");
+const script = document.createElement("script");
+script.src = "studio-data.js" + (served && rig ? "?rig=" + encodeURIComponent(rig) : "");
+script.onload = script.onerror = () => {
+    render(window.STUDIO);
+    show(sections.some(([id]) => "#" + id === location.hash) ? location.hash.slice(1) : "overview");
+};
+document.head.appendChild(script);
+
+if (served) {
+    fetch("api/rigs").then((r) => r.json()).then(({ rigs, default: def }) => {
+        $("rig").innerHTML = rigs.map((r) => `<option ${r === (rig || def) ? "selected" : ""}>${esc(r)}</option>`).join("");
+        $("rig-picker").classList.remove("hidden");
+        $("rig").addEventListener("change", (e) => { location.search = "?rig=" + encodeURIComponent(e.target.value); });
+    }).catch(() => {});
+}
+</script>
+</body>
+</html>

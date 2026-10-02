@@ -1,0 +1,59 @@
+Checked?,Musician,Sound Source,Mic/Line,Device Source,Field Connector,Input Group,Preamp Chassis,Input ,Preamp,Interface Connector,Interface,Interface Input,Label,Stack
+TRUE,Erick,Kick In,Mic,Audix D6,XLR,Group A,API 3124,Input 1,API 3124,XLR-TRS,Motu 16A,A3,Kick_In,drums/kick
+TRUE,Erick,Snare Top,Mic,Audix i5,XLR,Group A,Radial Workhorse,Input 3,Heritage Audio HA73 1 (Neve 1073),XLR-TRS,Motu 16A,A11,Snare_Top,drums/snare
+TRUE,Josh,Guitar Cabinet Left,Mic,Sennheiser e609,XLR,Group A,API 3124,Input 3,API 3124,XLR-TRS,Motu 16A,A5,Josh_Gtr_L,Smashed_Guitars/joshgtr
+TRUE,Josh,Guitar Cabinet Right,Mic,Sennheiser e609,XLR,Group A,API 3124,Input 4,API 3124,XLR-TRS,Motu 16A,A6,Josh_Gtr_R,Smashed_Guitars/joshgtr
+TRUE,Erick,Overhead 1 (Left),Mic,Octava MK-012 - A,XLR,Group A,Brent Averill 1272,Input 1,Brent Averill 1272 (Neve - Line amp),XLR-TRS,Motu 16A,A7,OH_L,drums/cymbals
+TRUE,Erick,Overhead 2 (Right),Mic,Octava MK-012 - B,XLR,Group A,Brent Averill 1272,Input 2,Brent Averill 1272 (Neve - Line amp),XLR-TRS,Motu 16A,A8,OH_R,drums/cymbals
+FALSE,Josh,Vocals,Mic,Neumann KMS 105 - to Input 8 - API,XLR,Group A,AT REPAIR: Warm Audio WA-2MPX,Input 1,Warm Audio WA-2MPX Dual-Channel Tube Mic Preamp,XLR-TRS,Motu 16A,A1,Josh_Vox,Screaming_Demons
+FALSE,Bill,Vocals,Mic,Audio Technica AE-5400 to Audinet Input 1,XLR,Group A,AT REPAIR: Warm Audio WA-2MPX,Input 2,Warm Audio WA-2MPX Dual-Channel Tube Mic Preamp,XLR-TRS,Motu 16A,A2,Bill_Vox,Screaming_Demons
+TRUE,Bill ,Pre Bass,Balanced Line,Line In/Thru to HX,XLR,Group B,Radial Workhorse,Input 1,Radial JDV-Pre,DB25->TRS,Motu 16A,A9,Bass_Pre,Punchy_Bass
+TRUE,John ,Vocals,Mic,Sennheiser e835,XLR,Group B,Radial Workhorse,Input 2,Radial Power Tube,DB25->TRS,Motu 16A,A10,John_Vox,Screaming_Demons
+TRUE,Erick,Kick Out,Mic,AKG C414 ,XLR,Group B,API 3124,Input 2,API 3124,DB25->TRS,Motu 16A,A4,Kick_Out,drums/kick
+TRUE,Erick,Snare Bottom,Mic,Shure 545SD ,XLR,Group B,Radial Workhorse,Input 4,Heritage Audio HA73 2 (Neve 1073),DB25->TRS,Motu 16A,A12,Snare_Bottom,drums/snare
+TRUE,Erick,Hi Hat,Mic,Beyerdynamic M 160,XLR,Group B,Radial Workhorse,Input 5,AEA RPQ500,DB25->TRS,Motu 16A,A13,HiHat,drums/cymbals
+TRUE,motu,Bass Cabinet,Mic,Shure Beta 52,XLR,Group B,MOTU 10pre,Input 4,MOTU 10pre,XLR/TRS,Motu 10pre,Mic 4,Bass_Mic,Punchy_Bass
+TRUE,Bill,Vocals,Mic,Audio Technica AE-5400,XLR,Group B,Radial Workhorse,Input 6,Cranborne Camden - 1,DB25->TRS,Motu 16A,A14,Bill_Vox,Screaming_Demons
+TRUE,John,Guitar Cabinet,Mic,Sennheiser 421,XLR,Group B,Radial Workhorse,Input 7,Cranborne Camden - 2,DB25->TRS,Motu 16A,A15,John_Gtr_Mic,Smashed_Guitars/johngtr
+TRUE,Josh,Vocals,Mic,Neumann KMS 105,XLR,Group B,Radial Workhorse,Input 8,API 312,DB25->TRS,Motu 16A,A16,Josh_Vox,Screaming_Demons
+TRUE,Bill ,Bass Direct,Balanced Line,Mesa TT-800 Pre of HX/Mesa Gain,XLR,Group C,MOTU 10pre,Input 3,MOTU 10pre,XLR/TRS,Motu 10pre,Mic 3,Bass_Direct,Punchy_Bass
+FALSE,Bill ,Bass Direct,Balanced Line,Mesa TT-800 Post Channel,XLR,Group C,Audient 880,Input 2,Audient 880,Optical,Motu 16A,O2,,
+TRUE,Josh,Guitar Direct Right,Balanced Line,Fractal FM-9,XLR,Group C,Direct (line),Input 3,Line,Line -> Phoenix,Motu 24Ai,AVB3-6,Fractal_R,Smashed_Guitars/joshgtr
+TRUE,Josh,Guitar Direct Left,Balanced Line,Fractal FM-9,XLR,Group C,Direct (line),Input 4,Line,Line -> Phoenix,Motu 24Ai,AVB3-5,Fractal_L,Smashed_Guitars/joshgtr
+TRUE,John ,Guitar Direct Right,Balanced Line,Line 6 Helix Stadium,XLR,Group C,Direct (line),Input 5,Line,Line -> Phoenix,Motu 24Ai,AVB3-8,Line6_R,Smashed_Guitars/johngtr
+TRUE,John ,Guitar Direct Left,Balanced Line,Line 6- Helix Stadium,XLR,Group C,Direct (line),Input 6,Line,Line -> Phoenix,Motu 24Ai,AVB3-7,Line6_L,Smashed_Guitars/johngtr
+FALSE,Josh,Deep Mind 12 L (current Mopho),Balanced Line,Behringer Deep Mind,TRS,Group C,Audient 880,Input 7,Audient 880,Optical,Motu 16A,O7,,
+FALSE,Josh,Deep Mind 12 R,Balanced Line,Behringer Deep Mind,TRS,Group C,Audient 880,Input 8,Audient 880,Optical,Motu 16A,O8,,
+TRUE,Erick,Tom 1 - 6 (concert),Mic,Shure SM 57,XLR,Group D,Presonus M80,Input 1,Presonus M80,XLR->DB25 (M80),Motu 24Ai,AVB1-1,Tom1,drums/toms
+TRUE,Erick,Tom 2 - 8(conert),Mic,Shure SM 58,XLR,Group D,Presonus M80,Input 2,Presonus M80,XLR->DB25 (M80),Motu 24Ai,AVB1-2,Tom2,drums/toms
+TRUE,Erick,Tom 3 - 10 (Rack),Mic,Audix D2,XLR,Group D,Presonus M80,Input 3,Presonus M80,XLR->DB25 (M80),Motu 24Ai,AVB1-3,Tom3,drums/toms
+TRUE,Erick,Tom 4 - 12 (Rack),Mic,Audix D2,XLR,Group D,Presonus M80,Input 4,Presonus M80,XLR->DB25 (M80),Motu 24Ai,AVB1-4,Tom4,drums/toms
+TRUE,Erick,Tom 5 - 13 rack),Mic,Audix D2,XLR,Group D,Presonus M80,Input 5,Presonus M80,XLR->DB25 (M80),Motu 24Ai,AVB1-5,Tom5,drums/toms
+FALSE,,,,,,,Presonus M80,Input 6,Dead Channel,,,AVB1-6,,
+TRUE,Erick,Tom 6 - 15 (Floor 1),Mic,Audix D4,XLR,Group D,Presonus M80,Input 7,Presonus M80,XLR->DB25 (M80),Motu 24Ai,AVB1-7,Tom6,drums/toms
+TRUE,Erick,Tom 7- 18 (Floor 2),Mic,Audix D4,XLR,Group D,Presonus M80,Input 8,Presonus M80,XLR->DB25 (M80),Motu 24Ai,AVB1-8,Tom7,drums/toms
+FALSE,,Blafill Bluetooh Audio L,Balanced Line,Blafill Bluetooh Audio L,XLR,Group E,Tascam XLR2DB25,Input 1,Passive,XLR->DB25 (Tascam snake),Motu 24Ai,AVB2-1,,
+FALSE,,Blafill Bluetooh Audio R,Balanced Line,Blafill Bluetooh Audio R,XLR,Group E,Tascam XLR2DB25,Input 2,Passive,XLR->DB25 (Tascam snake),Motu 24Ai,AVB2-2,,
+FALSE,Synth,Bass Station ,Unbalanced Line,JHS Color Box - Preamp,XLR,Group E,Tascam XLR2DB25,Input 3,Line,XLR->DB25 (Tascam snake),Motu 24Ai,AVB2-3,,
+FALSE,,,,,XLR,Group E,Tascam XLR2DB25,Input 4,Passive,XLR->DB25 (Tascam snake),Motu 24Ai,AVB2-4,,
+FALSE,,,,,XLR,Group E,Tascam XLR2DB25,Input 5,Passive,XLR->DB25 (Tascam snake),Motu 24Ai,AVB2-5,,
+FALSE,,,,,XLR,Group E,Tascam XLR2DB25,Input 6,Passive,XLR->DB25 (Tascam snake),Motu 24Ai,AVB2-6,,
+FALSE,,,,,XLR,Group E,Tascam XLR2DB25,Input 7,Passive,XLR->DB25 (Tascam snake),Motu 24Ai,AVB2-7,,
+FALSE,,,,,XLR,Group E,Tascam XLR2DB25,Input 8,Passive,XLR->DB25 (Tascam snake),Motu 24Ai,AVB2-8,,
+TRUE,Utility,Blafill Bluetooth Audio L,Balanced Line,Blafill Bluetooth receiver,XLR,Group F,Direct (line),Input 9,Line,Line -> Phoenix,Motu 24Ai,AVB3-1,BT_L,
+TRUE,Utility,Blafill Bluetooth Audio R,Balanced Line,Blafill Bluetooth receiver,XLR,Group F,Direct (line),Input 10,Line,Line -> Phoenix,Motu 24Ai,AVB3-2,BT_R,
+TRUE,Synth,Yamaha DX7,Unbalanced Line,Yamaha DX7,XLR,Group F,Direct (line),Input 11,JHS Colour Box -> Lundahl transformer,Line -> Phoenix,Motu 24Ai,AVB3-3,DX7,Synths
+TRUE,Synth,Novation Bass Station,Unbalanced Line,Novation Bass Station,XLR,Group F,Direct (line),Input 12,Darkglass preamp/fuzz,Line -> Phoenix,Motu 24Ai,AVB3-4,Bass_Station,Synths
+FALSE,,,,,XLR,Group F,Tascam XLR2DB25,Input 13,Passive,Phoenix,Motu 24Ai,AVB3-5,,
+FALSE,,,,,XLR,Group F,Tascam XLR2DB25,Input 14,Passive,Phoenix,Motu 24Ai,AVB3-6,,
+FALSE,,,,,XLR,Group F,Tascam XLR2DB25,Input 15,Passive,Phoenix,Motu 24Ai,AVB3-7,,
+FALSE,,,,,XLR,Group F,Tascam XLR2DB25,Input 16,Passive,Phoenix,Motu 24Ai,AVB3-8,,
+FALSE,Synth,Yamaha DX7,Unbalanced Line,Radial JD6 - Input 3,XLR,Group G,,,,Optical,Motu 24Ai,AVB4-1,,
+FALSE,Synth,Fantom XR L ?,Unbalanced Line,Radial JD6 - Input 1,XLR,Group G,Passive DI / Jensen,Input 1,Alesis 830 EQ,Optical,Motu 24Ai,AVB4-2,,
+FALSE,Synth,Fantom XR R ?,Unbalanced Line,Radial JD6 - Input 2,XLR,Group G,Passive DI / Jensen,Input 2,Alesis 830 EQ,Optical,Motu 24Ai,AVB4-3,,
+FALSE,Synth,Mopho L,Unbalanced Line,Radial JD6 - Input 5,XLR,Group G,Passive DI / Jensen,Input 3,Alesis 830 EQ,Optical,Motu 24Ai,AVB4-4,,
+FALSE,Synth,Mopho R,Unbalanced Line,Radial JD6 - Input 6,XLR,Group G,Passive DI / Jensen,Input 4,Alesis 830 EQ,Optical,Motu 24Ai,AVB4-5,,
+FALSE,,,Unbalanced Line,Radial JD6 - Input 4,XLR,Group G,Passive DI / Jensen,Input 5,Alesis 830 EQ,Optical,Motu 24Ai,AVB4-6,,
+FALSE,Synth,Theramini L(Mono),Unbalanced Line,,Line,Group G,Passive DI / Jensen,Input 6,Alesis 830 EQ,Optical,Motu 24Ai,AVB4-7,,
+TRUE,MAINS,MAINS - 16A Output 3,Balanced Line,ART Headphone Mix L,Line,Output Group A,Headphone Line,Input 7,Alesis 830 EQ,TRS-->XLR,Behringer Monitor 1,Input Left,,
+TRUE,MAINS,MAINS - 16A Output 4,Balanced Line,ART Headphone Mix R,Line,Output Group A,Headphone Line,Input 8,Alesis 830 EQ,TRS-->XLR,Behringer Monitor 1,Input Right,,

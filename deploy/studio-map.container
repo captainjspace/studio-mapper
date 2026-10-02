@@ -1,0 +1,19 @@
+# Rootless quadlet for the NUC: installed by `make nuc-deploy` into ~/.config/containers/systemd/
+[Unit]
+Description=studio-map docs and JSON API
+
+[Container]
+Image=localhost/studio-map:latest
+ContainerName=studio-map
+PublishPort=8080:8080
+# same layout as the repo, so the config's relative sheet and preset_index paths resolve
+Volume=%h/.local/share/studio-map:/etc/studio-map:ro,Z
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=ALL
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

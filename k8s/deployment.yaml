@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: studio-map
+  labels: {app: studio-map}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: studio-map}
+  template:
+    metadata:
+      labels: {app: studio-map}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: studio-map
+          image: localhost:32000/studio-map:latest
+          imagePullPolicy: Always
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 200m, memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: config, mountPath: /etc/studio-map, readOnly: true}
+      volumes:
+        # same layout as the repo, so the config's relative "sheet" and "preset_index" resolve
+        - name: config
+          configMap:
+            name: studio-map-config
+            items:
+              - {key: studio_config.json, path: studio_config.json}
+              - {key: studio-inputs.csv, path: data/studio-inputs.csv}
+              - {key: home-inputs.csv, path: data/home-inputs.csv}
+              - {key: presets.txt, path: data/presets.txt}

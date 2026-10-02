@@ -1,0 +1,6 @@
+*
+!go.mod
+!cmd/
+!internal/
+!docs/index.html
+!docs/embed.go

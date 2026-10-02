@@ -1,0 +1,144 @@
+Channel Strip Settings/Bus/BillFG7.cst
+Channel Strip Settings/Bus/ChillChorusVox.cst
+Channel Strip Settings/Bus/EvilGuitars.cst
+Channel Strip Settings/Bus/JustGain.cst
+Channel Strip Settings/Bus/Kick Bus.cst
+Channel Strip Settings/Bus/PunchyWarmBass.cst
+Channel Strip Settings/Bus/Screaming Demons.cst
+Channel Strip Settings/Bus/SmashBox.cst
+Channel Strip Settings/Bus/Smashed Guitars.cst
+Channel Strip Settings/Bus/Smashed GuitarsTR.cst
+Channel Strip Settings/Bus/TommyCat.cst
+Channel Strip Settings/Bus/tequilablendallguitarbus.cst
+Channel Strip Settings/Bus/tequiladrumchannel.cst
+Channel Strip Settings/Processing/InsaneFXStack.cst
+Channel Strip Settings/Processing/sillybass.cst
+Channel Strip Settings/Track/Kick In.cst
+Channel Strip Settings/Track/Kick Out.cst
+Channel Strip Settings/Track/Surfin' in Stereo.cst
+Channel Strip Settings/Track/billvoxvillagers.cst
+Channel Strip Settings/Track/johnvoxvillagers.cst
+Channel Strip Settings/Track/joshvox-villagers.cst
+Plug-In Settings/Adaptive Limiter/7sAL.pst
+Plug-In Settings/Channel EQ/FoolsGoldVoxGHighPass.pst
+Plug-In Settings/Channel EQ/GuitarBeef.pst
+Plug-In Settings/Channel EQ/JohnnyQ.pst
+Plug-In Settings/Channel EQ/Male Lead Vocal - FD Killah.pst
+Plug-In Settings/Channel EQ/Tom EQ Floor - Kill ring.pst
+Plug-In Settings/Channel EQ/TommyEQ.pst
+Plug-In Settings/Channel EQ/WhenDistortionisBad.pst
+Plug-In Settings/Channel EQ/chugnutz-kick.pst
+Plug-In Settings/Channel EQ/cleanringtopsnare-ride.pst
+Plug-In Settings/Channel EQ/erickbigfloor.pst
+Plug-In Settings/Channel EQ/foolsOHEQ.pst
+Plug-In Settings/Channel EQ/foolsSnareEQ.pst
+Plug-In Settings/Channel EQ/josh-addlohi.pst
+Plug-In Settings/Channel EQ/rideSnareEQ.pst
+Plug-In Settings/Channel EQ/tequilasnaretop.pst
+Plug-In Settings/Channel EQ/vt-kickin.pst
+Plug-In Settings/Channel EQ/whereareyoukick.pst
+Plug-In Settings/ChromaVerb/#default.pst
+Plug-In Settings/ChromaVerb/Bill Super short rvb - Clean Ambient Tail .pst
+Plug-In Settings/ChromaVerb/fxtail.pst
+Plug-In Settings/ChromaVerb/ridesnareverb.pst
+Plug-In Settings/ChromaVerb/studioasnareverb.pst
+Plug-In Settings/Compressor/BlackoutRedKit.pst
+Plug-In Settings/Compressor/ExpectedFET Electric Bass.pst
+Plug-In Settings/Compressor/HeavyDualSmashedGuitars.pst
+Plug-In Settings/Compressor/Jaba Burger Bass.pst
+Plug-In Settings/Compressor/JoshTequilaVoxComp.pst
+Plug-In Settings/Compressor/MellowVocalComperssion.pst
+Plug-In Settings/Compressor/New2026TommyComp.pst
+Plug-In Settings/Compressor/Ride5BassComp.pst
+Plug-In Settings/Compressor/RideSxBass.pst
+Plug-In Settings/Compressor/TommyComp.pst
+Plug-In Settings/Compressor/TommyComp2.pst
+Plug-In Settings/Compressor/TommyComp3.pst
+Plug-In Settings/Compressor/TommyComp4-TF.pst
+Plug-In Settings/Compressor/TriggerFingerGuitar.pst
+Plug-In Settings/Compressor/bass-sx-kick.pst
+Plug-In Settings/Compressor/chugnutz-drumbus.pst
+Plug-In Settings/Compressor/foolsSnareComp.pst
+Plug-In Settings/Compressor/ride-kick.pst
+Plug-In Settings/Compressor/ridesnarecomp.pst
+Plug-In Settings/Compressor/v7whererukick.pst
+Plug-In Settings/Compressor/v8whererukick.pst
+Plug-In Settings/Compressor/villagerskick.pst
+Plug-In Settings/Compressor/villagerstears-compguitar1.pst
+Plug-In Settings/Compressor/vt-gtrcomp-alt3.pst
+Plug-In Settings/DeEsser 2/ReduceDistortion1.pst
+Plug-In Settings/DeEsser 2/ReduceDistortion2.pst
+Plug-In Settings/Delay Designer/CarpeDio - Laugh.pst
+Plug-In Settings/Delay Designer/IFX-FinalDelay.pst
+Plug-In Settings/Delay Designer/Johnnys Dotted 1:4.pst
+Plug-In Settings/Delay Designer/Josh-pitched.pst
+Plug-In Settings/Delay Designer/Underground Patternride.pst
+Plug-In Settings/Delay Designer/carzyfoolEase In.pst
+Plug-In Settings/Delay Designer/pirateseasoftimevoices.pst
+Plug-In Settings/Delay Designer/simple180bpm.pst
+Plug-In Settings/Delay Designer/stable100bpm.pst
+Plug-In Settings/Delay Designer/stable80.pst
+Plug-In Settings/Delay Designer/sweetlazy375delay.pst
+Plug-In Settings/Delay Designer/villagers-clean-echo.pst
+Plug-In Settings/Double Dragon/#default.pst
+Plug-In Settings/Ensemble/crazyensemblevocal.pst
+Plug-In Settings/Exciter/Guitar Kicker.pst
+Plug-In Settings/Exciter/JohnnyExciter.pst
+Plug-In Settings/Gain/billvoxcomp-villagerstears.pst
+Plug-In Settings/Gain/the-minus-9.pst
+Plug-In Settings/I:O/UA2-1176.pst
+Plug-In Settings/Linear Phase EQ/EQ-15s.pst
+Plug-In Settings/Linear Phase EQ/Final Mix - Rock1.pst
+Plug-In Settings/Linear Phase EQ/smash.pst
+Plug-In Settings/Mastering Assistant/foolsgold3.pst
+Plug-In Settings/Mastering Assistant/foolsgold4.pst
+Plug-In Settings/Mastering Assistant/ride1.pst
+Plug-In Settings/Mastering Assistant/ride8a.pst
+Plug-In Settings/Mastering Assistant/ride8b.pst
+Plug-In Settings/Mastering Assistant/suggestedwru12.pst
+Plug-In Settings/Mastering Assistant/tequilaAIMC chain.pst
+Plug-In Settings/Mastering Assistant/triggerfinger-chain1.pst
+Plug-In Settings/Mastering Assistant/vt2.pst
+Plug-In Settings/Mastering Assistant/vt3mst.pst
+Plug-In Settings/Mastering Assistant/vt7.pst
+Plug-In Settings/Mastering Assistant/whereru#10.pst
+Plug-In Settings/Mastering Assistant/whereru#13.pst
+Plug-In Settings/Mastering Assistant/whereru#6.pst
+Plug-In Settings/Mastering Assistant/whereru#7.pst
+Plug-In Settings/Mastering Assistant/whereru#8-base.pst
+Plug-In Settings/Match EQ/bitvEQ.pst
+Plug-In Settings/Match EQ/piratesmatchq1.pst
+Plug-In Settings/Microphaser/IFX-MicroPhaser.pst
+Plug-In Settings/Multipressor/BillVoxMpress.pst
+Plug-In Settings/Multipressor/OHMultipress.pst
+Plug-In Settings/Multipressor/OHMultipress2.pst
+Plug-In Settings/Multipressor/johnfix.pst
+Plug-In Settings/Noise Gate/Ride5KickGate.pst
+Plug-In Settings/Phaser/dtlazer.pst
+Plug-In Settings/Pitch Shifter/Bill Visions Shift.pst
+Plug-In Settings/Quantec Room Simulator/#default.pst
+Plug-In Settings/Quantec Room Simulator/StudioDrums.pst
+Plug-In Settings/Space Designer/01.4s Jazz Vocal Room-JacobVocals.pst
+Plug-In Settings/Space Designer/Fatten-Snare-Jaba.pst
+Plug-In Settings/Space Designer/modernrockreverbmaster.pst
+Plug-In Settings/Space Designer/whereru-voxverb.pst
+Plug-In Settings/Stereo Delay/IFX-StereoDelay.pst
+Plug-In Settings/Stereo Delay/villagersbeerdcelay.pst
+Plug-In Settings/Stereo Delay/vox standard.pst
+Plug-In Settings/Tape Delay/TriggerFingerDelayGTFX.pst
+Plug-In Settings/Tape Delay/coolguitar.pst
+Plug-In Settings/Tape Delay/coolguitar2.pst
+Plug-In Settings/Tape Delay/longcoolguitar3-ride-intro.pst
+Plug-In Settings/Tape Delay/solopeak enhancedelay.pst
+Plug-In Settings/Vintage Console EQ/BassEQ.pst
+Plug-In Settings/Vintage Console EQ/BassEQ2-heavy.pst
+Plug-In Settings/Vintage Console EQ/FoolsGoldVox.pst
+Plug-In Settings/Vintage Console EQ/PhatVox.pst
+Plug-In Settings/Vintage Console EQ/PhatVoxTequila.pst
+Plug-In Settings/Vintage Console EQ/SmoothGuitarEdgeEQ.pst
+Plug-In Settings/Vintage Console EQ/SmoothGuitarEdgeEQwaspice.pst
+Plug-In Settings/Vintage Console EQ/TomEQWhereRu.pst
+Plug-In Settings/Vintage Console EQ/snarebottom.pst
+Plug-In Settings/Vintage Console EQ/tom-eq-carpe.pst
+Plug-In Settings/Vintage Tube EQ/villagers-kick-eq.pst
+Plug-In Settings/Vocal Transformer/IFX-VoxTrans.pst
