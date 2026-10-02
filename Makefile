@@ -1,8 +1,14 @@
 # Updated Go Studio Automation Makefile
 BINARY_NAME=studio-map
+REGISTRY ?= mozartsbutterfly.landmania.internal:32000
+KUBE_CONTEXT ?= microk8s
+IMAGE = $(REGISTRY)/studio-map:latest
+PRESET_LIBRARY = $(HOME)/Music/Audio Music Apps
+# podman's own auth only: ~/.docker/config.json has a gcloud helper that fails non-interactively
+export REGISTRY_AUTH_FILE := $(HOME)/.config/containers/auth.json
 INSTALL_DIR=$(HOME)/.local/bin
 
-.PHONY: all test build install plan routing docs deploy clean
+.PHONY: all test build install plan routing docs presets-index image push k8s-deploy publish deploy clean
 
 # 1. Default Target: Builds the tool and sets up path links (Safe offline)
 all: test build install
@@ -36,6 +42,29 @@ routing: build
 docs: build
 	@./$(BINARY_NAME) routing --json | { printf 'window.STUDIO = '; cat; printf ';\n'; } > docs/studio-data.js
 	@echo "📄 docs/studio-data.js updated: open docs/index.html"
+
+# Preset names for machines without the Logic library (the container): file names only
+presets-index:
+	@cd "$(PRESET_LIBRARY)" && { find "Channel Strip Settings" -mindepth 2 -maxdepth 2 -name '*.cst'; \
+		find "Plug-In Settings" -mindepth 2 -maxdepth 2 -name '*.pst'; } | LC_ALL=C sort > "$(CURDIR)/data/presets.txt"
+	@echo "🎛️  data/presets.txt: $$(wc -l < data/presets.txt | tr -d ' ') presets"
+
+# Containerized docs service on mozartsbutterfly (microk8s registry, NodePort 30180)
+image:
+	podman build --platform linux/amd64 -t $(IMAGE) -f Containerfile .
+
+push:
+	podman push --tls-verify=false $(IMAGE)
+
+k8s-deploy:
+	@mkdir -p k8s/files
+	@cp studio_config.json data/studio-inputs.csv data/presets.txt k8s/files/
+	kubectl --context $(KUBE_CONTEXT) apply -k k8s
+	kubectl --context $(KUBE_CONTEXT) -n studio-map rollout restart deployment/studio-map
+	kubectl --context $(KUBE_CONTEXT) -n studio-map rollout status deployment/studio-map --timeout=120s
+	@echo "📖 http://mozartsbutterfly.landmania.internal:30180"
+
+publish: image push k8s-deploy
 
 # 5. Live Configuration Deployment: snapshots to state/, writes changed names, verifies
 deploy: build

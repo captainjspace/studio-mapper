@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -21,15 +20,16 @@ var env struct {
 
 // Config holds what is not per-channel; per-channel names and stacks come from the sheet.
 type Config struct {
-	Devices    map[string]string  `json:"devices"`
-	Interfaces map[string]string  `json:"interfaces"`
-	HostDevice string             `json:"host_device"`
-	HostInputs []HostInput        `json:"host_inputs"`
-	PresetDir  string             `json:"preset_dir"`
-	Mix        map[string]MixNode `json:"mix"`
-	StemSplit  map[string]string  `json:"stem_split"` // Stem Splitter output -> Stack
-	Sheet      string             `json:"sheet"`      // relative to this config file
-	StateDir   string             `json:"state_dir"`  // relative to this config file
+	Devices     map[string]string  `json:"devices"`
+	Interfaces  map[string]string  `json:"interfaces"`
+	HostDevice  string             `json:"host_device"`
+	HostInputs  []HostInput        `json:"host_inputs"`
+	PresetDir   string             `json:"preset_dir"`
+	Mix         map[string]MixNode `json:"mix"`
+	StemSplit   map[string]string  `json:"stem_split"`   // Stem Splitter output -> Stack
+	Sheet       string             `json:"sheet"`        // relative to this config file
+	StateDir    string             `json:"state_dir"`    // relative to this config file
+	PresetIndex string             `json:"preset_index"` // relative to this config file; see `make presets-index`
 }
 
 // HostInput maps a block of device channels onto the host's Host In numbers.
@@ -46,6 +46,8 @@ var commands = map[string]func(args []string) error{
 	"apply":   runApply,
 	"restore": runRestore,
 	"routing": runRouting,
+	"serve":   runServe,
+	"inputs":  runInputs,
 }
 
 func main() {
@@ -57,7 +59,7 @@ func main() {
 	}
 	run, ok := commands[cmd]
 	if !ok {
-		fmt.Println("usage: studio-map [--config <studio_config.json>] [--sheet <inputs.csv>] [plan [-v] | apply | routing [--stems] [--json] | restore <state/snapshot.json>]")
+		fmt.Println("usage: studio-map [--config <studio_config.json>] [--sheet <inputs.csv>] [plan [-v] | apply | routing [--stems] [--json] | inputs | serve [--addr :8080] | restore <state/snapshot.json>]")
 		os.Exit(2)
 	}
 	paths, cfg, err := resolvePaths(configFlag, loadConfig)
@@ -93,7 +95,7 @@ func loadConfig(path string) (Config, error) {
 }
 
 func readLive(client *http.Client, cfg Config) Live {
-	live := Live{Datastores: map[string]Datastore{}, Presets: loadPresets(cmp.Or(cfg.PresetDir, defaultPresetDir))}
+	live := Live{Datastores: map[string]Datastore{}, Presets: presetsFor(env.paths, cfg)}
 	for _, dev := range sortedKeys(cfg.Devices) {
 		url := cfg.Devices[dev]
 		if url == "" {
@@ -144,32 +146,52 @@ func runPlan(args []string) error {
 	return nil
 }
 
-// runRouting prints the Logic build sheet. It needs only the sheet, config and presets, not the rack.
-func runRouting(args []string) error {
-	cfg := env.cfg
-	inputs, err := LoadSheet(env.paths.Sheet, cfg)
+// buildRouting builds the mix graph from the sheet (or Stem Splitter outputs) plus every problem found.
+func buildRouting(p Paths, cfg Config, stems bool) (MixGraph, Presets, string, [][2]string, error) {
+	inputs, err := LoadSheet(p.Sheet, cfg)
 	if err != nil {
-		return err
+		return MixGraph{}, Presets{}, "", nil, err
 	}
-	presets := loadPresets(cmp.Or(cfg.PresetDir, defaultPresetDir))
+	presets := presetsFor(p, cfg)
 	g := buildMixGraph(cfg, inputs, presets)
 
 	mode, problems := "session", [][2]string{}
-	if slices.Contains(args, "--stems") {
+	if stems {
 		mode = "stems"
 		known := g.Nodes
-		stems := stemInputs(cfg)
-		g = buildMixGraph(cfg, stems, presets)
+		stemTracks := stemInputs(cfg)
+		g = buildMixGraph(cfg, stemTracks, presets)
 		g.Partial = true
 		g.pruneEmptyStacks()
-		for _, in := range stems {
+		for _, in := range stemTracks {
 			if known[in.Stack] == nil {
 				problems = append(problems, [2]string{in.Source, fmt.Sprintf("stack %q is not in the sheet or mix config", in.Stack)})
 			}
 		}
 	}
-	problems = append(problems, validateMix(g, presets)...)
+	return g, presets, mode, append(problems, validateMix(g, presets)...), nil
+}
 
+// runInputs prints the flat input list as JSON.
+func runInputs(args []string) error {
+	inputs, err := LoadSheet(env.paths.Sheet, env.cfg)
+	if err != nil {
+		return err
+	}
+	out, err := json.MarshalIndent(inputsDoc(inputs, presetsFor(env.paths, env.cfg)), "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(out))
+	return nil
+}
+
+// runRouting prints the Logic build sheet. It needs only the sheet, config and presets, not the rack.
+func runRouting(args []string) error {
+	g, presets, mode, problems, err := buildRouting(env.paths, env.cfg, slices.Contains(args, "--stems"))
+	if err != nil {
+		return err
+	}
 	if slices.Contains(args, "--json") {
 		out, err := json.MarshalIndent(routingDoc(g, presets, mode, problems), "", "  ")
 		if err != nil {

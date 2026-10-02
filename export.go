@@ -79,3 +79,25 @@ func trackJSON(in Input, presets Presets) TrackJSON {
 	}
 	return t
 }
+
+// InputsDoc is the flat list of sheet inputs (one row per known interface input), for tables.
+type InputsDoc struct {
+	Version   int         `json:"version"`
+	Generated time.Time   `json:"generated"`
+	Inputs    []InputJSON `json:"inputs"`
+}
+
+type InputJSON struct {
+	TrackJSON
+	Row     int    `json:"row"`
+	Checked bool   `json:"checked"`
+	Stack   string `json:"stack,omitempty"`
+}
+
+func inputsDoc(inputs []Input, presets Presets) InputsDoc {
+	doc := InputsDoc{Version: routingDocVersion, Generated: time.Now(), Inputs: []InputJSON{}}
+	for _, in := range inputs {
+		doc.Inputs = append(doc.Inputs, InputJSON{TrackJSON: trackJSON(in, presets), Row: in.Row, Checked: in.Active, Stack: in.Stack})
+	}
+	return doc
+}

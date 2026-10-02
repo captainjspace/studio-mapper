@@ -17,6 +17,8 @@ type Paths struct {
 	Base   string // directory relative sheet/state paths are resolved against
 	Sheet  string
 	State  string
+
+	PresetIndex string // optional; used when the preset library isn't on this machine
 }
 
 // configCandidates lists where the config is looked for, in order.
@@ -73,12 +75,16 @@ func resolvePaths(flag string, cfg func(path string) (Config, error)) (Paths, Co
 			}
 			return filepath.Join(base, p)
 		}
-		return Paths{
+		p := Paths{
 			Config: real,
 			Base:   base,
 			Sheet:  abs(cmp.Or(c.Sheet, "data/studio-inputs.csv")),
 			State:  abs(cmp.Or(c.StateDir, "state")),
-		}, c, nil
+		}
+		if c.PresetIndex != "" {
+			p.PresetIndex = abs(c.PresetIndex)
+		}
+		return p, c, nil
 	}
 	return Paths{}, Config{}, fmt.Errorf("no %s found; looked in:\n  %s\nset --config <path> or STUDIO_MAP_CONFIG, or run `make install` to link ~/.config/studio-map/%s",
 		configName, strings.Join(tried, "\n  "), configName)
