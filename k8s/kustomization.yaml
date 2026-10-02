@@ -11,4 +11,5 @@ configMapGenerator:
     files:
       - files/studio_config.json
       - files/studio-inputs.csv
+      - files/home-inputs.csv
       - files/presets.txt

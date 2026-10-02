@@ -41,10 +41,24 @@ type Live struct {
 	Datastores map[string]Datastore // reachable datastore devices only
 	HostNames  []string             // CoreAudio input names of the host device; nil if unreadable
 	Presets    Presets
+	Known      map[string]bool // stacks used by any rig's sheet
 }
 
 func (p *Plan) add(s Status, scope, target, current, desired string) {
 	p.Steps = append(p.Steps, Step{s, scope, target, current, desired})
+}
+
+// check records one managed setting: ok when it matches, otherwise a change queued for apply.
+func (p *Plan) check(scope, target, current, desired string, same bool, dev, key, value string) {
+	if same {
+		p.add(StatusOK, scope, target, current, desired)
+		return
+	}
+	p.add(StatusChange, scope, target, current, desired)
+	if p.Writes[dev] == nil {
+		p.Writes[dev] = map[string]string{}
+	}
+	p.Writes[dev][key] = value
 }
 
 func (p Plan) count(s Status) int {
@@ -74,9 +88,11 @@ func buildPlan(cfg Config, inputs []Input, live Live) Plan {
 
 	planValidation(&p, cfg, active)
 	planDeviceNames(&p, cfg, active, live)
+	planOutputs(&p, cfg, live)
+	planRoutes(&p, cfg, live)
 	planStreams(&p, cfg, live)
 	planHostNames(&p, cfg, active, live)
-	planMix(&p, buildMixGraph(cfg, inputs, live.Presets), active, live.Presets)
+	planMix(&p, rigMixGraph(cfg, inputs, live.Presets, live.Known), active, live.Presets)
 	return p
 }
 
@@ -117,17 +133,92 @@ func planDeviceNames(p *Plan, cfg Config, active []Input, live Live) {
 			}
 			key := inputNamePath(bank, in.Ch)
 			current := ds.str(key)
-			if current == in.Label {
-				p.add(StatusOK, dev, target, current, in.Label)
-				continue
-			}
-			p.add(StatusChange, dev, target, current, in.Label)
-			if p.Writes[dev] == nil {
-				p.Writes[dev] = map[string]string{}
-			}
-			p.Writes[dev][key] = in.Label
+			p.check(dev, target, current, in.Label, current == in.Label, dev, key, in.Label)
 		}
 	}
+}
+
+// planOutputs manages output names declared in the rig's "outputs".
+func planOutputs(p *Plan, cfg Config, live Live) {
+	for _, dev := range sortedKeys(cfg.Outputs) {
+		ds, ok := live.Datastores[dev]
+		if !ok {
+			continue // offline is already reported for the device
+		}
+		scope := dev + " outputs"
+		for _, dest := range sortedKeys(cfg.Outputs[dev]) {
+			want := SanitizeHardwareName(cfg.Outputs[dev][dest])
+			key, err := ds.channelKey("obank", dest, "name")
+			if err != nil {
+				p.add(StatusWarn, scope, dest, "", err.Error())
+				continue
+			}
+			current := ds.str(key)
+			p.check(scope, dest, current, want, current == want, dev, key, want)
+		}
+	}
+}
+
+// planRoutes manages router sources declared in the rig's "routes" and flags undeclared computer loopbacks.
+func planRoutes(p *Plan, cfg Config, live Live) {
+	for _, dev := range sortedKeys(live.Datastores) {
+		ds, routes := live.Datastores[dev], cfg.Routes[dev]
+		scope := dev + " routes"
+		for _, dest := range sortedKeys(routes) {
+			key, err := ds.channelKey("obank", dest, "src")
+			if err == nil {
+				var want string
+				if want, err = ds.sourceValue(routes[dest]); err == nil {
+					current := ds.str(key)
+					p.check(scope, dest+" ←", ds.sourceLabel(current), routes[dest], current == want, dev, key, want)
+					continue
+				}
+			}
+			p.add(StatusWarn, scope, dest+" ← "+routes[dest], "", err.Error())
+		}
+		if loops := computerLoopbacks(ds, routes); loops != "" {
+			p.add(StatusWarn, scope, "To Computer "+loops, "From Computer", "loopback: feedback if Logic monitors these inputs while playing out the same channels")
+		}
+	}
+}
+
+// computerLoopbacks lists "To Computer N" channels fed from "From Computer", skipping declared routes.
+func computerLoopbacks(ds Datastore, routes map[string]string) string {
+	to, ok1 := ds.bankIdx("obank", "Computer")
+	from, ok2 := ds.bankIdx("ibank", "Computer")
+	if !ok1 || !ok2 {
+		return ""
+	}
+	var chans []int
+	for ch := 0; ; ch++ {
+		src, ok := ds[fmt.Sprintf("ext/obank/%d/ch/%d/src", to, ch)]
+		if !ok {
+			break
+		}
+		_, declared := routes[fmt.Sprintf("Computer %d", ch+1)]
+		if !declared && strings.HasPrefix(fmt.Sprint(src), fmt.Sprintf("%d:", from)) {
+			chans = append(chans, ch+1)
+		}
+	}
+	return compactRanges(chans)
+}
+
+// compactRanges renders 11,12,13,17 as "11–13, 17".
+func compactRanges(ns []int) string {
+	var parts []string
+	for i := 0; i < len(ns); {
+		j := i
+		for j+1 < len(ns) && ns[j+1] == ns[j]+1 {
+			j++
+		}
+		if j > i {
+			parts = append(parts, fmt.Sprintf("%d–%d", ns[i], ns[j]))
+		} else {
+			parts = append(parts, strconv.Itoa(ns[i]))
+		}
+		i = j + 1
+	}
+	return strings.Join(parts, ", ")
 }
 
 // planStreams checks that the host's AVB input streams listen to the talkers host_inputs expects.

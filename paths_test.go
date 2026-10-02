@@ -19,18 +19,22 @@ func writeConfig(t *testing.T, dir, body string) string {
 
 func TestResolvePathsFromSubdirectory(t *testing.T) {
 	root := t.TempDir()
-	writeConfig(t, root, `{"sheet": "data/inputs.csv"}`)
+	writeConfig(t, root, `{"rigs": {"oakland": {"sheet": "data/inputs.csv"}}}`)
 	sub := filepath.Join(root, "templates", "deep")
 	_ = os.MkdirAll(sub, 0o755)
 	t.Chdir(sub)
 	t.Setenv("STUDIO_MAP_CONFIG", "")
 
-	p, _, err := resolvePaths("", loadConfig)
+	p, cfg, err := resolvePaths("", loadConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rc, err := cfg.withRig(cfg.defaultRig())
 	if err != nil {
 		t.Fatal(err)
 	}
 	realRoot, _ := filepath.EvalSymlinks(root)
-	if p.Sheet != filepath.Join(realRoot, "data/inputs.csv") || p.State != filepath.Join(realRoot, "state") {
+	if p.abs(rc.Sheet) != filepath.Join(realRoot, "data/inputs.csv") || p.State != filepath.Join(realRoot, "state") {
 		t.Errorf("paths should resolve against the config's folder, got %+v", p)
 	}
 }
@@ -50,7 +54,7 @@ func TestResolvePathsFlagEnvAndSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	realRepo, _ := filepath.EvalSymlinks(repo)
-	if p.Base != realRepo || p.Sheet != filepath.Join(realRepo, "data/studio-inputs.csv") {
+	if p.Base != realRepo || p.abs("data/studio-inputs.csv") != filepath.Join(realRepo, "data/studio-inputs.csv") {
 		t.Errorf("a linked config must resolve paths in the real repo, got %+v", p)
 	}
 

@@ -42,4 +42,5 @@ spec:
             items:
               - {key: studio_config.json, path: studio_config.json}
               - {key: studio-inputs.csv, path: data/studio-inputs.csv}
+              - {key: home-inputs.csv, path: data/home-inputs.csv}
               - {key: presets.txt, path: data/presets.txt}

@@ -37,7 +37,7 @@ func TestRoutingDocSession(t *testing.T) {
 	presets := testPresets(t, "Track/Kick In.cst")
 	g := buildMixGraph(mixConfig(), inputs, presets)
 
-	doc := roundTrip(t, routingDoc(g, presets, "session", validateMix(g, presets)))
+	doc := roundTrip(t, routingDoc("oakland", g, presets, "session", validateMix(g, presets)))
 
 	if doc.Version != 1 || doc.Mode != "session" {
 		t.Errorf("version/mode = %d/%s", doc.Version, doc.Mode)
@@ -77,7 +77,7 @@ func TestRoutingDocStems(t *testing.T) {
 	g.Partial = true
 	g.pruneEmptyStacks()
 
-	doc := roundTrip(t, routingDoc(g, presets, "stems", nil))
+	doc := roundTrip(t, routingDoc("oakland", g, presets, "stems", nil))
 	drums := findNode(doc.Root, "drums")
 	if drums == nil || len(drums.Tracks) != 1 {
 		t.Fatalf("drums should hold the drum stem, got %+v", drums)

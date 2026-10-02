@@ -1,0 +1,10 @@
+Checked?,Musician,Sound Source,Mic/Line,Device Source,Preamp,Interface,Interface Input,Label,Stack
+FALSE,,Mic 1,Mic,,UltraLite AVB,Motu UltraLite AVB,Mic 1,Mic_1,
+FALSE,,Mic 2,Mic,,UltraLite AVB,Motu UltraLite AVB,Mic 2,Mic_2,
+FALSE,,Hi-Z 1 (usually out of the loop),Instrument,,UltraLite AVB,Motu UltraLite AVB,Guitar 1,HiZ_1,
+TRUE,Josh,UA 2-1176 return L (tracking: Lola Pre -> 1176; mixing: CueMix Aux 5/6 send),Line,UA 2-1176,Lola Pre -> UA 2-1176,Motu UltraLite AVB,Analog 1,UA_Ch1,Screaming_Demons
+TRUE,Josh,UA 2-1176 return R,Line,UA 2-1176,Lola Pre -> UA 2-1176,Motu UltraLite AVB,Analog 2,UA_Ch2,Screaming_Demons
+TRUE,Josh,DeepMind 12 L,Line,Behringer DeepMind 12,Line,Motu UltraLite AVB,Analog 3,DeepMindL,Synths
+TRUE,Josh,DeepMind 12 R,Line,Behringer DeepMind 12,Line,Motu UltraLite AVB,Analog 4,DeepMindR,Synths
+TRUE,Josh,Axe-Fx L,Line,Fractal Axe-Fx III,Line,Motu UltraLite AVB,Analog 5,AxeFXL,Smashed_Guitars/joshgtr
+TRUE,Josh,Axe-Fx R,Line,Fractal Axe-Fx III,Line,Motu UltraLite AVB,Analog 6,AXEFXR,Smashed_Guitars/joshgtr

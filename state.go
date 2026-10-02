@@ -13,11 +13,11 @@ type Snapshot struct {
 	Device string            `json:"device"`
 	URL    string            `json:"url"`
 	Taken  time.Time         `json:"taken"`
-	Names  map[string]string `json:"names"`
+	Names  map[string]string `json:"names"` // channel names and router sources, by datastore key
 }
 
 func saveSnapshot(dir, device, url string, ds Datastore) (string, error) {
-	snap := Snapshot{Device: device, URL: url, Taken: time.Now(), Names: ds.inputNames()}
+	snap := Snapshot{Device: device, URL: url, Taken: time.Now(), Names: ds.settings()}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

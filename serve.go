@@ -15,32 +15,47 @@ var indexHTML []byte
 func runServe(args []string) error {
 	addr, _ := takeFlag(args, "addr")
 	addr = cmp.Or(addr, ":8080")
-	fmt.Printf("studio-map serving on %s (config %s, sheet %s)\n", addr, env.paths.Config, env.paths.Sheet)
+	fmt.Printf("studio-map serving on %s (config %s)\n", addr, env.paths.Config)
 	return http.ListenAndServe(addr, newServer(env.paths))
 }
 
 func newServer(p Paths) http.Handler {
-	routing := func(r *http.Request) (any, error) {
+	// rigConfig re-reads the config and selects ?rig= (default: the config's default rig)
+	rigConfig := func(r *http.Request) (Paths, Config, error) {
 		cfg, err := loadConfig(p.Config)
 		if err != nil {
-			return nil, err
+			return p, cfg, err
 		}
-		g, presets, mode, problems, err := buildRouting(p, cfg, r.URL.Query().Has("stems"))
+		cfg, err = cfg.withRig(cmp.Or(r.URL.Query().Get("rig"), cfg.defaultRig()))
+		rp := p
+		rp.Sheet = p.abs(cfg.Sheet)
+		return rp, cfg, err
+	}
+	routing := func(r *http.Request) (any, error) {
+		rp, cfg, err := rigConfig(r)
 		if err != nil {
 			return nil, err
 		}
-		return routingDoc(g, presets, mode, problems), nil
+		g, presets, mode, problems, err := buildRouting(rp, cfg, r.URL.Query().Has("stems"))
+		if err != nil {
+			return nil, err
+		}
+		return routingDoc(cfg.RigName, g, presets, mode, problems), nil
 	}
 	inputs := func(r *http.Request) (any, error) {
+		rp, cfg, err := rigConfig(r)
+		if err != nil {
+			return nil, err
+		}
+		in, err := LoadSheet(rp.Sheet, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return inputsDoc(cfg.RigName, in, presetsFor(rp, cfg)), nil
+	}
+	rigs := func(r *http.Request) (any, error) {
 		cfg, err := loadConfig(p.Config)
-		if err != nil {
-			return nil, err
-		}
-		in, err := LoadSheet(p.Sheet, cfg)
-		if err != nil {
-			return nil, err
-		}
-		return inputsDoc(in, presetsFor(p, cfg)), nil
+		return map[string]any{"default": cfg.defaultRig(), "rigs": sortedKeys(cfg.Rigs)}, err
 	}
 	// serve renders a fresh document per request; wrap adapts it (e.g. into a script for the page)
 	serve := func(contentType string, wrap func([]byte) []byte, doc func(*http.Request) (any, error)) http.HandlerFunc {
@@ -69,6 +84,7 @@ func newServer(p Paths) http.Handler {
 	})
 	mux.HandleFunc("GET /api/routing", serve("application/json", asIs, routing))
 	mux.HandleFunc("GET /api/inputs", serve("application/json", asIs, inputs))
+	mux.HandleFunc("GET /api/rigs", serve("application/json", asIs, rigs))
 	mux.HandleFunc("GET /studio-data.js", serve("text/javascript", func(b []byte) []byte {
 		return append(append([]byte("window.STUDIO = "), b...), ";\n"...)
 	}, routing))

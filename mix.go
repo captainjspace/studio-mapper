@@ -23,7 +23,7 @@ type MixNode struct {
 	Insert *Insert `json:"insert,omitempty"`
 }
 
-// Insert is outboard gear patched in through Logic's I/O plugin on a given rig.
+// Insert is outboard gear on a given rig, patched via Logic's I/O plugin or the interface's own mixer.
 type Insert struct {
 	Rig string `json:"rig"`
 	Out string `json:"out"`
@@ -51,9 +51,10 @@ type Node struct {
 
 type MixGraph struct {
 	Nodes   map[string]*Node
-	Order   []string // signal-flow order from the output
-	Utility []Input  // inputs with no Stack: labeled on the hardware, not Logic tracks (e.g. Bluetooth to the PA)
-	Partial bool     // built from Stem Splitter outputs: mix entries without tracks are expected
+	Order   []string        // signal-flow order from the output
+	Utility []Input         // inputs with no Stack: labeled on the hardware, not Logic tracks (e.g. Bluetooth to the PA)
+	Partial bool            // built from Stem Splitter outputs: mix entries without tracks are expected
+	Known   map[string]bool // stacks used by any rig's sheet; empty here but used elsewhere is fine
 }
 
 func buildMixGraph(cfg Config, inputs []Input, presets Presets) MixGraph {
@@ -118,13 +119,14 @@ func buildMixGraph(cfg Config, inputs []Input, presets Presets) MixGraph {
 	return g
 }
 
-// pruneEmptyStacks drops stacks with no tracks and no children (e.g. per-player pans when mixing stem splits).
+// pruneEmptyStacks drops stacks with no tracks and no children that are expected to be empty here:
+// any in stem mode (per-player pans), otherwise those another rig's sheet uses. True orphans stay and get warned.
 func (g *MixGraph) pruneEmptyStacks() {
 	for changed := true; changed; {
 		changed = false
 		for _, name := range g.Order {
 			n := g.Nodes[name]
-			if n.Kind == "stack" && len(n.Tracks) == 0 && len(g.children(name)) == 0 {
+			if n.Kind == "stack" && len(n.Tracks) == 0 && len(g.children(name)) == 0 && (g.Partial || g.Known[name]) {
 				delete(g.Nodes, name)
 				g.Order = slices.DeleteFunc(g.Order, func(s string) bool { return s == name })
 				changed = true
@@ -189,7 +191,7 @@ func validateMix(g MixGraph, presets Presets) [][2]string {
 	}
 	for _, name := range g.Order {
 		n := g.Nodes[name]
-		if n.Kind == "stack" && !n.FromSheet && !g.Partial {
+		if n.Kind == "stack" && !n.FromSheet && !g.Partial && !g.Known[name] {
 			bad(name, "mix entry matches no Stack in the sheet")
 		}
 		if n.Kind != "output" {
@@ -226,4 +228,39 @@ func (g MixGraph) reachesOutput(name string) bool {
 		seen = append(seen, n.Name)
 	}
 	return false
+}
+
+// knownStacks collects every stack (and sub-stack) used by any rig's sheet, plus the stem split targets.
+func knownStacks(cfg Config, p Paths) map[string]bool {
+	known := map[string]bool{}
+	for _, name := range sortedKeys(cfg.Rigs) {
+		rc, err := cfg.withRig(name)
+		if err != nil {
+			continue
+		}
+		inputs, err := LoadSheet(p.abs(rc.Sheet), rc)
+		if err != nil {
+			continue
+		}
+		for _, in := range activeInputs(inputs) {
+			top, sub, _ := strings.Cut(in.Stack, "/")
+			known[top] = true
+			if sub != "" {
+				known[sub] = true
+			}
+		}
+	}
+	for _, stack := range cfg.StemSplit {
+		known[stack] = true
+	}
+	delete(known, "")
+	return known
+}
+
+// rigMixGraph builds this rig's graph, aware of stacks other rigs use.
+func rigMixGraph(cfg Config, inputs []Input, presets Presets, known map[string]bool) MixGraph {
+	g := buildMixGraph(cfg, inputs, presets)
+	g.Known = known
+	g.pruneEmptyStacks()
+	return g
 }

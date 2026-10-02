@@ -17,8 +17,10 @@ func TestDecodeInterfaceInput(t *testing.T) {
 		{"AVB1-1", "Analog", 1, true},
 		{"AVB3-8", "Analog", 24, true},
 		{"O3", "Optical", 3, true},
-		{"Mic 2", "Mic/Inst", 2, true},
-		{"Input Left", "", 0, false},
+		{"Mic 2", "Mic", 2, true},
+		{"Analog 1", "Analog", 1, true},
+		{"Mix Aux 5", "Mix Aux", 5, true},
+		{"Input-Left", "", 0, false},
 	}
 	for _, c := range cases {
 		bank, ch, ok := decodeInterfaceInput(c.in)
@@ -81,7 +83,13 @@ func TestStudioSheetLoads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadSheet(paths.Sheet, cfg); err != nil {
-		t.Fatal(err)
+	for _, rig := range sortedKeys(cfg.Rigs) {
+		rc, err := cfg.withRig(rig)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadSheet(paths.abs(rc.Sheet), rc); err != nil {
+			t.Errorf("rig %s: %v", rig, err)
+		}
 	}
 }

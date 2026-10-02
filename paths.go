@@ -15,10 +15,18 @@ const configName = "studio_config.json"
 type Paths struct {
 	Config string // resolved config file
 	Base   string // directory relative sheet/state paths are resolved against
-	Sheet  string
+	Sheet  string // the selected rig's sheet; set after rig selection
 	State  string
 
 	PresetIndex string // optional; used when the preset library isn't on this machine
+}
+
+// abs resolves a config-relative path.
+func (p Paths) abs(rel string) string {
+	if rel == "" || filepath.IsAbs(rel) {
+		return rel
+	}
+	return filepath.Join(p.Base, rel)
 }
 
 // configCandidates lists where the config is looked for, in order.
@@ -78,7 +86,6 @@ func resolvePaths(flag string, cfg func(path string) (Config, error)) (Paths, Co
 		p := Paths{
 			Config: real,
 			Base:   base,
-			Sheet:  abs(cmp.Or(c.Sheet, "data/studio-inputs.csv")),
 			State:  abs(cmp.Or(c.StateDir, "state")),
 		}
 		if c.PresetIndex != "" {

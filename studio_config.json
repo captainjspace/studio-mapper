@@ -1,40 +1,106 @@
 {
-  "sheet": "data/studio-inputs.csv",
   "state_dir": "state",
   "preset_index": "data/presets.txt",
-  "devices": {
-    "16a": "http://16a.local",
-    "24ai": "http://24ai.local",
-    "10pre": ""
-  },
-  "interfaces": {
-    "Motu 16A": "16a",
-    "Motu 24Ai": "24ai",
-    "Motu 10pre": "10pre"
-  },
-  "host_device": "10pre",
-  "host_inputs": [
-    {
-      "device": "16a",
-      "bank": "Analog",
-      "count": 16,
-      "host_start": 1,
-      "avb_stream": 1
+  "default_rig": "oakland",
+  "rigs": {
+    "oakland": {
+      "sheet": "data/studio-inputs.csv",
+      "host_device": "10pre",
+      "devices": {
+        "16a": "http://16a.local",
+        "24ai": "http://24ai.local",
+        "10pre": ""
+      },
+      "interfaces": {
+        "Motu 16A": "16a",
+        "Motu 24Ai": "24ai",
+        "Motu 10pre": "10pre"
+      },
+      "host_inputs": [
+        {
+          "device": "16a",
+          "bank": "Analog",
+          "count": 16,
+          "host_start": 1,
+          "avb_stream": 1
+        },
+        {
+          "device": "24ai",
+          "bank": "Analog",
+          "count": 24,
+          "host_start": 17,
+          "avb_stream": 3
+        },
+        {
+          "device": "10pre",
+          "bank": "Mic",
+          "count": 10,
+          "host_start": 41
+        }
+      ]
     },
-    {
-      "device": "24ai",
-      "bank": "Analog",
-      "count": 24,
-      "host_start": 17,
-      "avb_stream": 3
-    },
-    {
-      "device": "10pre",
-      "bank": "Mic/Inst",
-      "count": 10,
-      "host_start": 41
+    "home": {
+      "sheet": "data/home-inputs.csv",
+      "host_device": "UltraLite AVB",
+      "devices": {
+        "ultralite": "http://UltraLite-AVB.local"
+      },
+      "interfaces": {
+        "Motu UltraLite AVB": "ultralite"
+      },
+      "host_inputs": [
+        {
+          "device": "ultralite",
+          "bank": "Mic",
+          "count": 2,
+          "host_start": 1
+        },
+        {
+          "device": "ultralite",
+          "bank": "Analog",
+          "from": 1,
+          "count": 2,
+          "host_start": 5
+        },
+        {
+          "device": "ultralite",
+          "bank": "Guitar",
+          "count": 1,
+          "host_start": 7
+        },
+        {
+          "device": "ultralite",
+          "bank": "Analog",
+          "from": 5,
+          "count": 2,
+          "host_start": 9
+        },
+        {
+          "device": "ultralite",
+          "bank": "Analog",
+          "from": 3,
+          "count": 2,
+          "host_start": 15
+        }
+      ],
+      "outputs": {
+        "ultralite": {
+          "Analog 1": "1176_Send_L",
+          "Analog 2": "1176_Send_R"
+        }
+      },
+      "routes": {
+        "ultralite": {
+          "Analog 1": "Computer 5",
+          "Analog 2": "Computer 6",
+          "Computer 5": "Analog 1",
+          "Computer 6": "Analog 2",
+          "Computer 13": "Computer 3",
+          "Computer 14": "Computer 4"
+        }
+      }
     }
-  ],
+  },
   "mix": {
     "drums": {
       "preset": "Bus/tequiladrumchannel.cst",
@@ -80,11 +146,11 @@
     },
     "Mix_Bus": {
       "kind": "aux",
-      "plugin": "I:O/UA2-1176.pst",
+      "plugin": "UA 2-1176 (hardware, recorded back as a stereo track)",
       "insert": {
         "rig": "home",
-        "out": "3/4",
-        "in": "13/14"
+        "out": "Logic stereo out 5/6 \u2192 Analog Out 1/2 \u2192 1176",
+        "in": "Analog In 1/2 (jacks 5/6) \u2192 record in 5/6"
       }
     },
     "Stereo_Out": {

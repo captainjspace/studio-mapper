@@ -13,7 +13,8 @@ import (
 // Datastore is the flat key/value tree a MOTU AVB device serves at /datastore.
 type Datastore map[string]any
 
-var inputNameKey = regexp.MustCompile(`^ext/ibank/\d+/ch/\d+/name$`)
+// settingKey matches what apply can change and restore puts back: channel names and router sources.
+var settingKey = regexp.MustCompile(`^ext/[io]bank/\d+/ch/\d+/(name|src)$`)
 
 func fetchDatastore(client *http.Client, baseURL string) (Datastore, error) {
 	resp, err := client.Get(baseURL + "/datastore")
@@ -55,9 +56,12 @@ func (d Datastore) str(key string) string {
 	return ""
 }
 
-func (d Datastore) bankIndex(name string) (int, bool) {
+func (d Datastore) bankIndex(name string) (int, bool) { return d.bankIdx("ibank", name) }
+
+// bankIdx finds a bank by name in "ibank" (sources, inputs) or "obank" (destinations, outputs).
+func (d Datastore) bankIdx(kind, name string) (int, bool) {
 	for i := 0; ; i++ {
-		v, ok := d[fmt.Sprintf("ext/ibank/%d/name", i)]
+		v, ok := d[fmt.Sprintf("ext/%s/%d/name", kind, i)]
 		if !ok {
 			return 0, false
 		}
@@ -67,18 +71,64 @@ func (d Datastore) bankIndex(name string) (int, bool) {
 	}
 }
 
+// channelKey turns "Analog 1" into "ext/obank/2/ch/0/<leaf>" using this device's bank names.
+func (d Datastore) channelKey(kind, ref, leaf string) (string, error) {
+	bank, ch, ok := channelRef(ref)
+	if !ok {
+		return "", fmt.Errorf("%q is not \"<bank> <channel>\"", ref)
+	}
+	idx, ok := d.bankIdx(kind, bank)
+	if !ok {
+		side := "input"
+		if kind == "obank" {
+			side = "output"
+		}
+		return "", fmt.Errorf("no %s bank named %q", side, bank)
+	}
+	return fmt.Sprintf("ext/%s/%d/ch/%d/%s", kind, idx, ch-1, leaf), nil
+}
+
+// sourceValue turns a source like "Mix Aux 5" into the router value "13:4".
+func (d Datastore) sourceValue(ref string) (string, error) {
+	key, err := d.channelKey("ibank", ref, "")
+	if err != nil {
+		return "", err
+	}
+	var bank, ch int
+	_, _ = fmt.Sscanf(key, "ext/ibank/%d/ch/%d/", &bank, &ch)
+	return fmt.Sprintf("%d:%d", bank, ch), nil
+}
+
+// sourceLabel turns a router value like "13:4" back into "Mix Aux 5".
+func (d Datastore) sourceLabel(v string) string {
+	var bank, ch int
+	if _, err := fmt.Sscanf(v, "%d:%d", &bank, &ch); err != nil {
+		return "(none)"
+	}
+	return fmt.Sprintf("%s %d", d.str(fmt.Sprintf("ext/ibank/%d/name", bank)), ch+1)
+}
+
+func channelRef(ref string) (bank string, ch int, ok bool) {
+	m := bankNotation.FindStringSubmatch(strings.TrimSpace(ref))
+	if m == nil {
+		return "", 0, false
+	}
+	ch, _ = strconv.Atoi(m[2])
+	return m[1], ch, ch > 0
+}
+
 func inputNamePath(bank, ch int) string {
 	return fmt.Sprintf("ext/ibank/%d/ch/%d/name", bank, ch-1)
 }
 
-func (d Datastore) inputNames() map[string]string {
-	names := map[string]string{}
+func (d Datastore) settings() map[string]string {
+	out := map[string]string{}
 	for k := range d {
-		if inputNameKey.MatchString(k) {
-			names[k] = d.str(k)
+		if settingKey.MatchString(k) {
+			out[k] = d.str(k)
 		}
 	}
-	return names
+	return out
 }
 
 // avbEntity finds the AVB uid of the entity with the given name, as seen from this device.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,18 +19,25 @@ var env struct {
 	cfg   Config
 }
 
-// Config holds what is not per-channel; per-channel names and stacks come from the sheet.
+// Config holds what is not per-channel; per-channel names and stacks come from each rig's sheet.
 type Config struct {
-	Devices     map[string]string  `json:"devices"`
-	Interfaces  map[string]string  `json:"interfaces"`
-	HostDevice  string             `json:"host_device"`
-	HostInputs  []HostInput        `json:"host_inputs"`
+	Rigs        map[string]Rig     `json:"rigs"`        // locations, each with its own device map
+	DefaultRig  string             `json:"default_rig"` // used when nothing is detected or asked for
 	PresetDir   string             `json:"preset_dir"`
-	Mix         map[string]MixNode `json:"mix"`
+	Mix         map[string]MixNode `json:"mix"`          // shared by every rig
 	StemSplit   map[string]string  `json:"stem_split"`   // Stem Splitter output -> Stack
-	Sheet       string             `json:"sheet"`        // relative to this config file
 	StateDir    string             `json:"state_dir"`    // relative to this config file
 	PresetIndex string             `json:"preset_index"` // relative to this config file; see `make presets-index`
+
+	// Effective device map of the selected rig, filled in by withRig.
+	RigName    string                       `json:"-"`
+	Devices    map[string]string            `json:"-"`
+	Interfaces map[string]string            `json:"-"`
+	HostDevice string                       `json:"-"`
+	HostInputs []HostInput                  `json:"-"`
+	Outputs    map[string]map[string]string `json:"-"`
+	Routes     map[string]map[string]string `json:"-"`
+	Sheet      string                       `json:"-"`
 }
 
 // HostInput maps a block of device channels onto the host's Host In numbers.
@@ -38,6 +46,7 @@ type HostInput struct {
 	Bank      string `json:"bank"`
 	Count     int    `json:"count"`
 	HostStart int    `json:"host_start"`
+	From      int    `json:"from,omitempty"`       // first bank channel of the block (default 1)
 	AVBStream int    `json:"avb_stream,omitempty"` // first host AVB input stream carrying this block
 }
 
@@ -53,13 +62,14 @@ var commands = map[string]func(args []string) error{
 func main() {
 	configFlag, args := takeFlag(os.Args[1:], "config")
 	sheetFlag, args := takeFlag(args, "sheet")
+	rigFlag, args := takeFlag(args, "rig")
 	cmd := "plan"
 	if len(args) > 0 {
 		cmd, args = args[0], args[1:]
 	}
 	run, ok := commands[cmd]
 	if !ok {
-		fmt.Println("usage: studio-map [--config <studio_config.json>] [--sheet <inputs.csv>] [plan [-v] | apply | routing [--stems] [--json] | inputs | serve [--addr :8080] | restore <state/snapshot.json>]")
+		fmt.Println("usage: studio-map [--config <studio_config.json>] [--rig <name>] [--sheet <inputs.csv>] [plan [-v] | apply | routing [--stems] [--json] | inputs | serve [--addr :8080] | restore <state/snapshot.json>]")
 		os.Exit(2)
 	}
 	paths, cfg, err := resolvePaths(configFlag, loadConfig)
@@ -67,6 +77,15 @@ func main() {
 		fmt.Printf("❌ %v\n", err)
 		os.Exit(1)
 	}
+	rig, err := chooseRig(cfg, rigFlag, cmd == "plan" || cmd == "apply")
+	if err == nil {
+		cfg, err = cfg.withRig(rig)
+	}
+	if err != nil && cmd != "serve" {
+		fmt.Printf("❌ %v\n", err)
+		os.Exit(1)
+	}
+	paths.Sheet = paths.abs(cfg.Sheet)
 	if sheetFlag != "" {
 		paths.Sheet, _ = filepath.Abs(sheetFlag)
 	}
@@ -95,7 +114,7 @@ func loadConfig(path string) (Config, error) {
 }
 
 func readLive(client *http.Client, cfg Config) Live {
-	live := Live{Datastores: map[string]Datastore{}, Presets: presetsFor(env.paths, cfg)}
+	live := Live{Datastores: map[string]Datastore{}, Presets: presetsFor(env.paths, cfg), Known: knownStacks(cfg, env.paths)}
 	for _, dev := range sortedKeys(cfg.Devices) {
 		url := cfg.Devices[dev]
 		if url == "" {
@@ -142,7 +161,7 @@ func runPlan(args []string) error {
 		return err
 	}
 	printPlan(s.plan, len(args) > 0 && args[0] == "-v")
-	GenerateConsoleBlueprint(buildMixGraph(s.cfg, s.inputs, s.live.Presets))
+	GenerateConsoleBlueprint(rigMixGraph(s.cfg, s.inputs, s.live.Presets, s.live.Known))
 	return nil
 }
 
@@ -153,7 +172,7 @@ func buildRouting(p Paths, cfg Config, stems bool) (MixGraph, Presets, string, [
 		return MixGraph{}, Presets{}, "", nil, err
 	}
 	presets := presetsFor(p, cfg)
-	g := buildMixGraph(cfg, inputs, presets)
+	g := rigMixGraph(cfg, inputs, presets, knownStacks(cfg, p))
 
 	mode, problems := "session", [][2]string{}
 	if stems {
@@ -178,7 +197,7 @@ func runInputs(args []string) error {
 	if err != nil {
 		return err
 	}
-	out, err := json.MarshalIndent(inputsDoc(inputs, presetsFor(env.paths, env.cfg)), "", "  ")
+	out, err := json.MarshalIndent(inputsDoc(env.cfg.RigName, inputs, presetsFor(env.paths, env.cfg)), "", "  ")
 	if err != nil {
 		return err
 	}
@@ -193,7 +212,7 @@ func runRouting(args []string) error {
 		return err
 	}
 	if slices.Contains(args, "--json") {
-		out, err := json.MarshalIndent(routingDoc(g, presets, mode, problems), "", "  ")
+		out, err := json.MarshalIndent(routingDoc(env.cfg.RigName, g, presets, mode, problems), "", "  ")
 		if err != nil {
 			return err
 		}
@@ -229,7 +248,7 @@ func runApply(args []string) error {
 		if err := verifyWrites(s.client, url, writes); err != nil {
 			return fmt.Errorf("verify %s: %w", dev, err)
 		}
-		fmt.Printf("✅ %s: %d input names written and verified\n", dev, len(writes))
+		fmt.Printf("✅ %s: %d settings written and verified\n", dev, len(writes))
 	}
 
 	if n := s.plan.count(StatusManual); n > 0 {
@@ -246,10 +265,7 @@ func runRestore(args []string) error {
 	if err != nil {
 		return err
 	}
-	url := env.cfg.Devices[snap.Device]
-	if url == "" {
-		url = snap.URL
-	}
+	url := cmp.Or(env.cfg.deviceURL(snap.Device), snap.URL)
 	client := newClient()
 	ds, err := fetchDatastore(client, url)
 	if err != nil {
@@ -262,7 +278,7 @@ func runRestore(args []string) error {
 	if err := verifyWrites(client, url, diff); err != nil {
 		return err
 	}
-	fmt.Printf("⏪ %s: restored %d input names from %s\n", snap.Device, len(diff), snap.Taken.Format(time.RFC3339))
+	fmt.Printf("⏪ %s: restored %d settings from %s\n", snap.Device, len(diff), snap.Taken.Format(time.RFC3339))
 	return nil
 }
 

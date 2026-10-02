@@ -58,7 +58,7 @@ push:
 
 k8s-deploy:
 	@mkdir -p k8s/files
-	@cp studio_config.json data/studio-inputs.csv data/presets.txt k8s/files/
+	@cp studio_config.json data/studio-inputs.csv data/home-inputs.csv data/presets.txt k8s/files/
 	kubectl --context $(KUBE_CONTEXT) apply -k k8s
 	kubectl --context $(KUBE_CONTEXT) -n studio-map rollout restart deployment/studio-map
 	kubectl --context $(KUBE_CONTEXT) -n studio-map rollout status deployment/studio-map --timeout=120s

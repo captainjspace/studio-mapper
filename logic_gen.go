@@ -96,7 +96,7 @@ func printRouting(g MixGraph, presets Presets) {
 		}
 	}
 
-	fmt.Println("\n── OUTBOARD (I/O plugin inserts)")
+	fmt.Println("\n── OUTBOARD (hardware inserts and sends)")
 	for _, name := range g.Order {
 		if n := g.Nodes[name]; n.Insert != nil {
 			fmt.Printf("  %-18s %s  (%s)\n", name, n.Plugin, n.Insert)

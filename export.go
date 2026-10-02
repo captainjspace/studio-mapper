@@ -8,6 +8,7 @@ const routingDocVersion = 1
 type RoutingDoc struct {
 	Version     int         `json:"version"`
 	Generated   time.Time   `json:"generated"`
+	Rig         string      `json:"rig,omitempty"`
 	Mode        string      `json:"mode"` // "session" or "stems"
 	Root        *NodeJSON   `json:"root,omitempty"`
 	NotRecorded []TrackJSON `json:"notRecorded,omitempty"`
@@ -45,8 +46,8 @@ type Warning struct {
 }
 
 // routingDoc renders the mix graph as the nested tree the band app displays.
-func routingDoc(g MixGraph, presets Presets, mode string, problems [][2]string) RoutingDoc {
-	doc := RoutingDoc{Version: routingDocVersion, Generated: time.Now(), Mode: mode, Warnings: []Warning{}}
+func routingDoc(rig string, g MixGraph, presets Presets, mode string, problems [][2]string) RoutingDoc {
+	doc := RoutingDoc{Version: routingDocVersion, Generated: time.Now(), Rig: rig, Mode: mode, Warnings: []Warning{}}
 	if out, ok := g.Nodes[stereoOut]; ok {
 		doc.Root = nodeJSON(g, out, presets)
 	}
@@ -84,6 +85,7 @@ func trackJSON(in Input, presets Presets) TrackJSON {
 type InputsDoc struct {
 	Version   int         `json:"version"`
 	Generated time.Time   `json:"generated"`
+	Rig       string      `json:"rig,omitempty"`
 	Inputs    []InputJSON `json:"inputs"`
 }
 
@@ -94,8 +96,8 @@ type InputJSON struct {
 	Stack   string `json:"stack,omitempty"`
 }
 
-func inputsDoc(inputs []Input, presets Presets) InputsDoc {
-	doc := InputsDoc{Version: routingDocVersion, Generated: time.Now(), Inputs: []InputJSON{}}
+func inputsDoc(rig string, inputs []Input, presets Presets) InputsDoc {
+	doc := InputsDoc{Version: routingDocVersion, Generated: time.Now(), Rig: rig, Inputs: []InputJSON{}}
 	for _, in := range inputs {
 		doc.Inputs = append(doc.Inputs, InputJSON{TrackJSON: trackJSON(in, presets), Row: in.Row, Checked: in.Active, Stack: in.Stack})
 	}

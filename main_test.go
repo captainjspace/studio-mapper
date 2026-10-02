@@ -19,6 +19,15 @@ type fakeMOTU struct {
 func (f *fakeMOTU) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if key, ok := strings.CutPrefix(r.URL.Path, "/datastore/"); ok && r.Method == http.MethodGet {
+		v, found := f.ds[key]
+		if !found {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"value": v})
+		return
+	}
 	if r.URL.Path != "/datastore" {
 		w.WriteHeader(http.StatusNotFound)
 		return

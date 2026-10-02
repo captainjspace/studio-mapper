@@ -16,10 +16,14 @@ func testRepo(t *testing.T) Paths {
 	t.Helper()
 	dir := t.TempDir()
 	files := map[string]string{
-		configName: `{"sheet": "data/inputs.csv", "preset_index": "data/presets.txt", "preset_dir": "/nonexistent",
-			"interfaces": {"Motu 16A": "16a"},
-			"host_inputs": [{"device": "16a", "bank": "Analog", "count": 16, "host_start": 1}],
+		configName: `{"preset_index": "data/presets.txt", "preset_dir": "/nonexistent", "default_rig": "oakland",
+			"rigs": {
+				"oakland": {"sheet": "data/inputs.csv", "interfaces": {"Motu 16A": "16a"},
+					"host_inputs": [{"device": "16a", "bank": "Analog", "count": 16, "host_start": 1}]},
+				"home": {"sheet": "data/home.csv", "interfaces": {"Motu UltraLite AVB": "ultralite"},
+					"host_inputs": [{"device": "ultralite", "bank": "Analog", "count": 2, "host_start": 5}]}},
 			"mix": {"Mix_Bus": {"kind": "aux"}, "Stereo_Out": {"kind": "output"}}}`,
+		"data/home.csv":    "Checked?,Musician,Sound Source,Interface,Interface Input,Label,Stack\nTRUE,Josh,Vocals,Motu UltraLite AVB,Analog 1,UA_Ch1,Screaming_Demons\n",
 		"data/inputs.csv":  "Checked?,Musician,Sound Source,Interface,Interface Input,Label,Stack\nTRUE,Erick,Kick In,Motu 16A,A3,Kick_In,drums/kick\n",
 		"data/presets.txt": "Channel Strip Settings/Bus/drums.cst\nChannel Strip Settings/Track/Kick In.cst\n",
 	}
@@ -82,6 +86,17 @@ func TestServer(t *testing.T) {
 	}
 	if in := inputs.Inputs[0]; !in.Checked || in.HostIn != 3 || in.Stack != "drums/kick" || in.Musician != "Erick" || in.ChannelPreset != "Track/Kick In.cst" {
 		t.Errorf("input row = %+v", in)
+	}
+	code, body = get(t, srv, "/api/inputs?rig=home")
+	var home InputsDoc
+	if err := json.Unmarshal([]byte(body), &home); code != 200 || err != nil || home.Rig != "home" || len(home.Inputs) != 1 || home.Inputs[0].HostIn != 5 {
+		t.Errorf("/api/inputs?rig=home = %d %v: %s", code, err, body)
+	}
+	if code, body := get(t, srv, "/api/rigs"); code != 200 || !strings.Contains(body, `"default": "oakland"`) || !strings.Contains(body, `"home"`) {
+		t.Errorf("/api/rigs = %d %s", code, body)
+	}
+	if code, _ := get(t, srv, "/api/routing?rig=nowhere"); code != 500 {
+		t.Errorf("unknown rig should fail, got %d", code)
 	}
 	if code, _ := get(t, srv, "/nope"); code != 404 {
 		t.Errorf("unknown path should 404, got %d", code)

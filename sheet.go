@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/csv"
 	"fmt"
 	"os"
@@ -59,8 +60,10 @@ var inputNotations = []struct {
 	{regexp.MustCompile(`^A(\d+)$`), "Analog", func(n []int) int { return n[0] }},
 	{regexp.MustCompile(`^AVB(\d+)-(\d+)$`), "Analog", func(n []int) int { return (n[0]-1)*8 + n[1] }},
 	{regexp.MustCompile(`^O(\d+)$`), "Optical", func(n []int) int { return n[0] }},
-	{regexp.MustCompile(`^(?i:mic|in)\s*(\d+)$`), "Mic/Inst", func(n []int) int { return n[0] }},
 }
+
+// bankNotation is the generic "<Bank> N" form, using the device's own bank names: "Analog 1", "Mic 3".
+var bankNotation = regexp.MustCompile(`^([A-Za-z][A-Za-z/ -]*?)\s+(\d+)$`)
 
 func decodeInterfaceInput(s string) (bank string, ch int, ok bool) {
 	s = strings.TrimSpace(s)
@@ -75,13 +78,18 @@ func decodeInterfaceInput(s string) (bank string, ch int, ok bool) {
 		}
 		return n.bank, n.ch(nums), true
 	}
+	if m := bankNotation.FindStringSubmatch(s); m != nil {
+		ch, _ := strconv.Atoi(m[2])
+		return m[1], ch, true
+	}
 	return "", 0, false
 }
 
 func hostInFor(cfg Config, device, bank string, ch int) int {
 	for _, h := range cfg.HostInputs {
-		if h.Device == device && h.Bank == bank && ch >= 1 && ch <= h.Count {
-			return h.HostStart + ch - 1
+		from := cmp.Or(h.From, 1)
+		if h.Device == device && h.Bank == bank && ch >= from && ch < from+h.Count {
+			return h.HostStart + ch - from
 		}
 	}
 	return 0
