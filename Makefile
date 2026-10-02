@@ -2,7 +2,7 @@
 BINARY_NAME=studio-map
 INSTALL_DIR=$(HOME)/.local/bin
 
-.PHONY: all test build install plan routing deploy clean
+.PHONY: all test build install plan routing docs deploy clean
 
 # 1. Default Target: Builds the tool and sets up path links (Safe offline)
 all: test build install
@@ -31,6 +31,11 @@ plan: build
 # 4. Logic build sheet: tracks, stacks, buses, sends, presets (no rack needed)
 routing: build
 	@./$(BINARY_NAME) routing
+
+# Docs page data: docs/index.html loads docs/studio-data.js (works from file://)
+docs: build
+	@./$(BINARY_NAME) routing --json | { printf 'window.STUDIO = '; cat; printf ';\n'; } > docs/studio-data.js
+	@echo "📄 docs/studio-data.js updated: open docs/index.html"
 
 # 5. Live Configuration Deployment: snapshots to state/, writes changed names, verifies
 deploy: build
