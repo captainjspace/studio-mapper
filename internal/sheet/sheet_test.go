@@ -1,9 +1,11 @@
-package main
+package sheet
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"studio/engine/internal/config"
 )
 
 func TestDecodeInterfaceInput(t *testing.T) {
@@ -23,7 +25,7 @@ func TestDecodeInterfaceInput(t *testing.T) {
 		{"Input-Left", "", 0, false},
 	}
 	for _, c := range cases {
-		bank, ch, ok := decodeInterfaceInput(c.in)
+		bank, ch, ok := DecodeInterfaceInput(c.in)
 		if bank != c.bank || ch != c.ch || ok != c.ok {
 			t.Errorf("%q → (%q, %d, %t), want (%q, %d, %t)", c.in, bank, ch, ok, c.bank, c.ch, c.ok)
 		}
@@ -44,14 +46,14 @@ func TestLoadSheet(t *testing.T) {
 	if err := os.WriteFile(path, []byte(fixtureCSV), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{
+	cfg := config.Config{
 		Interfaces: map[string]string{"Motu 16A": "16a", "Motu 24Ai": "24ai"},
-		HostInputs: []HostInput{
+		HostInputs: []config.HostInput{
 			{Device: "16a", Bank: "Analog", Count: 16, HostStart: 1},
 			{Device: "24ai", Bank: "Analog", Count: 24, HostStart: 17},
 		},
 	}
-	inputs, err := LoadSheet(path, cfg)
+	inputs, err := Load(path, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,16 +81,16 @@ func TestLoadSheet(t *testing.T) {
 
 // TestStudioSheetLoads guards the real sheet export: it must parse against the real config.
 func TestStudioSheetLoads(t *testing.T) {
-	paths, cfg, err := resolvePaths("", loadConfig)
+	paths, cfg, err := config.Resolve("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, rig := range sortedKeys(cfg.Rigs) {
-		rc, err := cfg.withRig(rig)
+	for _, rig := range cfg.RigNames() {
+		rc, err := cfg.WithRig(rig)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := LoadSheet(paths.abs(rc.Sheet), rc); err != nil {
+		if _, err := Load(paths.Abs(rc.Sheet), rc); err != nil {
 			t.Errorf("rig %s: %v", rig, err)
 		}
 	}

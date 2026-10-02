@@ -1,9 +1,17 @@
-package main
+// Package export renders the routing tree and input list as the versioned JSON the docs page and band app read.
+package export
 
-import "time"
+import (
+	"time"
 
-// routingDocVersion is bumped on breaking changes to the JSON the band app reads.
-const routingDocVersion = 1
+	"studio/engine/internal/config"
+	"studio/engine/internal/mix"
+	"studio/engine/internal/presets"
+	"studio/engine/internal/sheet"
+)
+
+// Version is bumped on breaking changes to the JSON the band app reads.
+const Version = 1
 
 type RoutingDoc struct {
 	Version     int         `json:"version"`
@@ -16,16 +24,16 @@ type RoutingDoc struct {
 }
 
 type NodeJSON struct {
-	Name     string      `json:"name"`
-	Kind     string      `json:"kind"`
-	Bus      int         `json:"bus,omitempty"`
-	Pan      *int        `json:"pan,omitempty"`
-	Preset   string      `json:"preset,omitempty"`
-	Plugin   string      `json:"plugin,omitempty"`
-	Insert   *Insert     `json:"insert,omitempty"`
-	Sends    []Send      `json:"sends,omitempty"`
-	Children []*NodeJSON `json:"children,omitempty"`
-	Tracks   []TrackJSON `json:"tracks,omitempty"`
+	Name     string         `json:"name"`
+	Kind     string         `json:"kind"`
+	Bus      int            `json:"bus,omitempty"`
+	Pan      *int           `json:"pan,omitempty"`
+	Preset   string         `json:"preset,omitempty"`
+	Plugin   string         `json:"plugin,omitempty"`
+	Insert   *config.Insert `json:"insert,omitempty"`
+	Sends    []config.Send  `json:"sends,omitempty"`
+	Children []*NodeJSON    `json:"children,omitempty"`
+	Tracks   []TrackJSON    `json:"tracks,omitempty"`
 }
 
 type TrackJSON struct {
@@ -45,14 +53,14 @@ type Warning struct {
 	Message string `json:"message"`
 }
 
-// routingDoc renders the mix graph as the nested tree the band app displays.
-func routingDoc(rig string, g MixGraph, presets Presets, mode string, problems [][2]string) RoutingDoc {
-	doc := RoutingDoc{Version: routingDocVersion, Generated: time.Now(), Rig: rig, Mode: mode, Warnings: []Warning{}}
-	if out, ok := g.Nodes[stereoOut]; ok {
-		doc.Root = nodeJSON(g, out, presets)
+// Routing renders the mix graph as the nested tree the band app displays.
+func Routing(rig string, g mix.Graph, lib presets.Presets, mode string, problems [][2]string) RoutingDoc {
+	doc := RoutingDoc{Version: Version, Generated: time.Now(), Rig: rig, Mode: mode, Warnings: []Warning{}}
+	if out, ok := g.Nodes[mix.StereoOut]; ok {
+		doc.Root = nodeJSON(g, out, lib)
 	}
 	for _, in := range g.Utility {
-		doc.NotRecorded = append(doc.NotRecorded, trackJSON(in, presets))
+		doc.NotRecorded = append(doc.NotRecorded, trackJSON(in, lib))
 	}
 	for _, p := range problems {
 		doc.Warnings = append(doc.Warnings, Warning{Node: p[0], Message: p[1]})
@@ -60,19 +68,19 @@ func routingDoc(rig string, g MixGraph, presets Presets, mode string, problems [
 	return doc
 }
 
-func nodeJSON(g MixGraph, n *Node, presets Presets) *NodeJSON {
+func nodeJSON(g mix.Graph, n *mix.Node, lib presets.Presets) *NodeJSON {
 	j := &NodeJSON{Name: n.Name, Kind: n.Kind, Bus: n.Bus, Pan: n.Pan, Preset: n.Preset, Plugin: n.Plugin, Insert: n.Insert, Sends: n.Sends}
-	for _, k := range g.children(n.Name) {
-		j.Children = append(j.Children, nodeJSON(g, k, presets))
+	for _, k := range g.Children(n.Name) {
+		j.Children = append(j.Children, nodeJSON(g, k, lib))
 	}
 	for _, t := range n.Tracks {
-		j.Tracks = append(j.Tracks, trackJSON(t, presets))
+		j.Tracks = append(j.Tracks, trackJSON(t, lib))
 	}
 	return j
 }
 
-func trackJSON(in Input, presets Presets) TrackJSON {
-	rel, _ := presets.find("Track", in.Label)
+func trackJSON(in sheet.Input, lib presets.Presets) TrackJSON {
+	rel, _ := lib.Find("Track", in.Label)
 	t := TrackJSON{Label: in.Label, Musician: in.Musician, Source: in.SoundSource, Mic: in.Mic, Preamp: in.Preamp,
 		HostIn: in.HostIn, Stem: in.Stem, ChannelPreset: rel}
 	if !in.Stem {
@@ -96,10 +104,11 @@ type InputJSON struct {
 	Stack   string `json:"stack,omitempty"`
 }
 
-func inputsDoc(rig string, inputs []Input, presets Presets) InputsDoc {
-	doc := InputsDoc{Version: routingDocVersion, Generated: time.Now(), Rig: rig, Inputs: []InputJSON{}}
+// Inputs renders the flat input list.
+func Inputs(rig string, inputs []sheet.Input, lib presets.Presets) InputsDoc {
+	doc := InputsDoc{Version: Version, Generated: time.Now(), Rig: rig, Inputs: []InputJSON{}}
 	for _, in := range inputs {
-		doc.Inputs = append(doc.Inputs, InputJSON{TrackJSON: trackJSON(in, presets), Row: in.Row, Checked: in.Active, Stack: in.Stack})
+		doc.Inputs = append(doc.Inputs, InputJSON{TrackJSON: trackJSON(in, lib), Row: in.Row, Checked: in.Active, Stack: in.Stack})
 	}
 	return doc
 }

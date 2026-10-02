@@ -1,75 +1,54 @@
-package main
+// Package mix models the Logic signal flow: tracks → stacks → buses → Mix_Bus → Stereo_Out.
+package mix
 
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
+
+	"studio/engine/internal/config"
+	"studio/engine/internal/presets"
+	"studio/engine/internal/sheet"
 )
 
 const (
-	mixBus    = "Mix_Bus"
-	stereoOut = "Stereo_Out"
+	MixBus    = "Mix_Bus"
+	StereoOut = "Stereo_Out"
 )
 
-// MixNode is the config side of a routing node: everything the sheet can't say.
-type MixNode struct {
-	Kind   string  `json:"kind,omitempty"` // stack (default), aux, output
-	Output string  `json:"output,omitempty"`
-	Pan    *int    `json:"pan,omitempty"`
-	Preset string  `json:"preset,omitempty"`
-	Plugin string  `json:"plugin,omitempty"`
-	Sends  []Send  `json:"sends,omitempty"`
-	Insert *Insert `json:"insert,omitempty"`
-}
-
-// Insert is outboard gear on a given rig, patched via Logic's I/O plugin or the interface's own mixer.
-type Insert struct {
-	Rig string `json:"rig"`
-	Out string `json:"out"`
-	In  string `json:"in"`
-}
-
-func (i Insert) String() string {
-	return fmt.Sprintf("%s: send %s, return %s; real-time bounce, or print the return", i.Rig, i.Out, i.In)
-}
-
-type Send struct {
-	To    string  `json:"to"`
-	Level float64 `json:"level"`
-}
-
-// Node is a resolved routing node: a sheet stack or sub-stack merged with its MixNode.
+// Node is a resolved routing node: a sheet stack or sub-stack merged with its config.MixNode.
 type Node struct {
-	MixNode
+	config.MixNode
 	Name      string
 	Parent    string
 	Bus       int // input bus; 0 for the output
-	Tracks    []Input
+	Tracks    []sheet.Input
 	FromSheet bool
 }
 
-type MixGraph struct {
+type Graph struct {
 	Nodes   map[string]*Node
 	Order   []string        // signal-flow order from the output
-	Utility []Input         // inputs with no Stack: labeled on the hardware, not Logic tracks (e.g. Bluetooth to the PA)
+	Utility []sheet.Input   // inputs with no Stack: labeled on the hardware, not Logic tracks (e.g. Bluetooth to the PA)
 	Partial bool            // built from Stem Splitter outputs: mix entries without tracks are expected
 	Known   map[string]bool // stacks used by any rig's sheet; empty here but used elsewhere is fine
 }
 
-func buildMixGraph(cfg Config, inputs []Input, presets Presets) MixGraph {
-	g := MixGraph{Nodes: map[string]*Node{}}
+func Build(cfg config.Config, inputs []sheet.Input, lib presets.Presets) Graph {
+	g := Graph{Nodes: map[string]*Node{}}
 	node := func(name string) *Node {
 		if n, ok := g.Nodes[name]; ok {
 			return n
 		}
-		n := &Node{Name: name, MixNode: MixNode{Kind: "stack"}}
+		n := &Node{Name: name, MixNode: config.MixNode{Kind: "stack"}}
 		g.Nodes[name] = n
 		g.Order = append(g.Order, name)
 		return n
 	}
 
-	for _, in := range activeInputs(inputs) {
+	for _, in := range sheet.ActiveInputs(inputs) {
 		if in.HostIn == 0 && !in.Stem {
 			continue
 		}
@@ -87,7 +66,7 @@ func buildMixGraph(cfg Config, inputs []Input, presets Presets) MixGraph {
 		leaf.Tracks = append(leaf.Tracks, in)
 	}
 
-	for _, name := range sortedKeys(cfg.Mix) {
+	for _, name := range slices.Sorted(maps.Keys(cfg.Mix)) {
 		n, m := node(name), cfg.Mix[name]
 		kind := cmp.Or(m.Kind, n.Kind)
 		n.MixNode = m
@@ -96,7 +75,7 @@ func buildMixGraph(cfg Config, inputs []Input, presets Presets) MixGraph {
 
 	for _, n := range g.Nodes {
 		if n.Preset == "" && n.Plugin == "" {
-			n.Preset, _ = presets.find("Bus", n.Name)
+			n.Preset, _ = lib.Find("Bus", n.Name)
 		}
 	}
 
@@ -109,24 +88,24 @@ func buildMixGraph(cfg Config, inputs []Input, presets Presets) MixGraph {
 		case n.Output != "":
 		case n.Parent != "":
 			n.Output = n.Parent
-		case name == mixBus:
-			n.Output = stereoOut
+		case name == MixBus:
+			n.Output = StereoOut
 		default:
-			n.Output = mixBus
+			n.Output = MixBus
 		}
 	}
 	g.numberBuses()
 	return g
 }
 
-// pruneEmptyStacks drops stacks with no tracks and no children that are expected to be empty here:
+// PruneEmptyStacks drops stacks with no tracks and no children that are expected to be empty here:
 // any in stem mode (per-player pans), otherwise those another rig's sheet uses. True orphans stay and get warned.
-func (g *MixGraph) pruneEmptyStacks() {
+func (g *Graph) PruneEmptyStacks() {
 	for changed := true; changed; {
 		changed = false
 		for _, name := range g.Order {
 			n := g.Nodes[name]
-			if n.Kind == "stack" && len(n.Tracks) == 0 && len(g.children(name)) == 0 && (g.Partial || g.Known[name]) {
+			if n.Kind == "stack" && len(n.Tracks) == 0 && len(g.Children(name)) == 0 && (g.Partial || g.Known[name]) {
 				delete(g.Nodes, name)
 				g.Order = slices.DeleteFunc(g.Order, func(s string) bool { return s == name })
 				changed = true
@@ -139,7 +118,7 @@ func (g *MixGraph) pruneEmptyStacks() {
 
 // numberBuses walks the signal flow from the output so each group's buses are consecutive.
 // Nodes that never reach the output are numbered last.
-func (g *MixGraph) numberBuses() {
+func (g *Graph) numberBuses() {
 	var order []string
 	var walk func(name string)
 	walk = func(name string) {
@@ -147,7 +126,7 @@ func (g *MixGraph) numberBuses() {
 			return
 		}
 		order = append(order, name)
-		for _, k := range g.children(name) {
+		for _, k := range g.Children(name) {
 			walk(k.Name)
 		}
 	}
@@ -169,8 +148,8 @@ func (g *MixGraph) numberBuses() {
 	g.Order = order
 }
 
-// children returns the nodes that output into name, in graph order.
-func (g MixGraph) children(name string) []*Node {
+// Children returns the nodes that output into name, in graph order.
+func (g Graph) Children(name string) []*Node {
 	var out []*Node
 	for _, n := range g.Order {
 		if g.Nodes[n].Output == name {
@@ -180,14 +159,14 @@ func (g MixGraph) children(name string) []*Node {
 	return out
 }
 
-// validateMix returns one problem per broken route or missing preset, keyed by node name.
-func validateMix(g MixGraph, presets Presets) [][2]string {
+// Validate returns one problem per broken route or missing preset, keyed by node name.
+func Validate(g Graph, lib presets.Presets) [][2]string {
 	var problems [][2]string
 	bad := func(name, format string, args ...any) {
 		problems = append(problems, [2]string{name, fmt.Sprintf(format, args...)})
 	}
-	if _, ok := g.Nodes[stereoOut]; !ok {
-		bad(stereoOut, "no %s node in mix config", stereoOut)
+	if _, ok := g.Nodes[StereoOut]; !ok {
+		bad(StereoOut, "no %s node in mix config", StereoOut)
 	}
 	for _, name := range g.Order {
 		n := g.Nodes[name]
@@ -198,7 +177,7 @@ func validateMix(g MixGraph, presets Presets) [][2]string {
 			if _, ok := g.Nodes[n.Output]; !ok {
 				bad(name, "output %q does not exist", n.Output)
 			} else if !g.reachesOutput(name) {
-				bad(name, "never reaches %s (cycle)", stereoOut)
+				bad(name, "never reaches %s (cycle)", StereoOut)
 			}
 		}
 		for _, s := range n.Sends {
@@ -206,17 +185,17 @@ func validateMix(g MixGraph, presets Presets) [][2]string {
 				bad(name, "send target %q does not exist", s.To)
 			}
 		}
-		if n.Preset != "" && !presets.exists(n.Preset) {
+		if n.Preset != "" && !lib.Exists(n.Preset) {
 			bad(name, "preset %s not found", n.Preset)
 		}
-		if strings.HasSuffix(n.Plugin, ".pst") && !presets.pluginPresetExists(n.Plugin) {
+		if strings.HasSuffix(n.Plugin, ".pst") && !lib.PluginPresetExists(n.Plugin) {
 			bad(name, "plugin preset %s not found", n.Plugin)
 		}
 	}
 	return problems
 }
 
-func (g MixGraph) reachesOutput(name string) bool {
+func (g Graph) reachesOutput(name string) bool {
 	var seen []string
 	for n, ok := g.Nodes[name]; ok; n, ok = g.Nodes[n.Output] {
 		if n.Kind == "output" {
@@ -228,39 +207,4 @@ func (g MixGraph) reachesOutput(name string) bool {
 		seen = append(seen, n.Name)
 	}
 	return false
-}
-
-// knownStacks collects every stack (and sub-stack) used by any rig's sheet, plus the stem split targets.
-func knownStacks(cfg Config, p Paths) map[string]bool {
-	known := map[string]bool{}
-	for _, name := range sortedKeys(cfg.Rigs) {
-		rc, err := cfg.withRig(name)
-		if err != nil {
-			continue
-		}
-		inputs, err := LoadSheet(p.abs(rc.Sheet), rc)
-		if err != nil {
-			continue
-		}
-		for _, in := range activeInputs(inputs) {
-			top, sub, _ := strings.Cut(in.Stack, "/")
-			known[top] = true
-			if sub != "" {
-				known[sub] = true
-			}
-		}
-	}
-	for _, stack := range cfg.StemSplit {
-		known[stack] = true
-	}
-	delete(known, "")
-	return known
-}
-
-// rigMixGraph builds this rig's graph, aware of stacks other rigs use.
-func rigMixGraph(cfg Config, inputs []Input, presets Presets, known map[string]bool) MixGraph {
-	g := buildMixGraph(cfg, inputs, presets)
-	g.Known = known
-	g.pruneEmptyStacks()
-	return g
 }

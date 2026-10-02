@@ -1,4 +1,4 @@
-package main
+package plan
 
 import (
 	"encoding/json"
@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"studio/engine/internal/motu"
 )
 
-// Snapshot records a device's input names before apply, so they can be restored.
+// Snapshot records a device's names and routes before apply, so they can be restored.
 type Snapshot struct {
 	Device string            `json:"device"`
 	URL    string            `json:"url"`
@@ -16,8 +18,9 @@ type Snapshot struct {
 	Names  map[string]string `json:"names"` // channel names and router sources, by datastore key
 }
 
-func saveSnapshot(dir, device, url string, ds Datastore) (string, error) {
-	snap := Snapshot{Device: device, URL: url, Taken: time.Now(), Names: ds.settings()}
+// SaveSnapshot writes <dir>/<device>-<time>.json.
+func SaveSnapshot(dir, device, url string, ds motu.Datastore) (string, error) {
+	snap := Snapshot{Device: device, URL: url, Taken: time.Now(), Names: ds.Settings()}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
@@ -26,7 +29,7 @@ func saveSnapshot(dir, device, url string, ds Datastore) (string, error) {
 	return path, os.WriteFile(path, data, 0o644)
 }
 
-func loadSnapshot(path string) (Snapshot, error) {
+func LoadSnapshot(path string) (Snapshot, error) {
 	var snap Snapshot
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -36,15 +39,4 @@ func loadSnapshot(path string) (Snapshot, error) {
 		return snap, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return snap, nil
-}
-
-// changedNames returns the entries of want that differ from the live datastore.
-func changedNames(ds Datastore, want map[string]string) map[string]string {
-	diff := map[string]string{}
-	for k, v := range want {
-		if ds.str(k) != v {
-			diff[k] = v
-		}
-	}
-	return diff
 }

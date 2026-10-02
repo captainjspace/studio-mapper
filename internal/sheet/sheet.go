@@ -1,4 +1,5 @@
-package main
+// Package sheet reads the studio Google Sheet (CSV export) into inputs resolved against a rig's Host In layout.
+package sheet
 
 import (
 	"cmp"
@@ -6,8 +7,13 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+	"unicode"
+
+	"studio/engine/internal/config"
+	"studio/engine/internal/motu"
 )
 
 // Input is one row of the studio sheet resolved against the host_inputs layout.
@@ -29,8 +35,8 @@ type Input struct {
 	Preamp      string
 }
 
-// where names the track's source for build sheets: "In 5" or "Stem".
-func (in Input) where() string {
+// Where names the track's source for build sheets: "In 5" or "Stem".
+func (in Input) Where() string {
 	if in.Stem {
 		return "Stem"
 	}
@@ -40,8 +46,8 @@ func (in Input) where() string {
 // stemOrder is the order Logic's Stem Splitter outputs are listed in build sheets.
 var stemOrder = []string{"Drums", "Bass", "Guitar", "Piano", "Vocals", "Other"}
 
-// stemInputs turns cfg.StemSplit into tracks, one per Stem Splitter output, each on its stack.
-func stemInputs(cfg Config) []Input {
+// StemInputs turns cfg.StemSplit into tracks, one per Stem Splitter output, each on its stack.
+func StemInputs(cfg config.Config) []Input {
 	var inputs []Input
 	for _, stem := range stemOrder {
 		if stack, ok := cfg.StemSplit[stem]; ok {
@@ -49,6 +55,18 @@ func stemInputs(cfg Config) []Input {
 		}
 	}
 	return inputs
+}
+
+// ActiveInputs returns the checked rows in Host In order.
+func ActiveInputs(inputs []Input) []Input {
+	var out []Input
+	for _, in := range inputs {
+		if in.Active {
+			out = append(out, in)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].HostIn < out[j].HostIn })
+	return out
 }
 
 // inputNotations decode the sheet's "Interface Input" column.
@@ -62,10 +80,8 @@ var inputNotations = []struct {
 	{regexp.MustCompile(`^O(\d+)$`), "Optical", func(n []int) int { return n[0] }},
 }
 
-// bankNotation is the generic "<Bank> N" form, using the device's own bank names: "Analog 1", "Mic 3".
-var bankNotation = regexp.MustCompile(`^([A-Za-z][A-Za-z/ -]*?)\s+(\d+)$`)
-
-func decodeInterfaceInput(s string) (bank string, ch int, ok bool) {
+// DecodeInterfaceInput reads "A5", "AVB1-3", "O1" or the generic "<Bank> N" ("Analog 1", "Mic 3").
+func DecodeInterfaceInput(s string) (bank string, ch int, ok bool) {
 	s = strings.TrimSpace(s)
 	for _, n := range inputNotations {
 		m := n.re.FindStringSubmatch(s)
@@ -78,14 +94,10 @@ func decodeInterfaceInput(s string) (bank string, ch int, ok bool) {
 		}
 		return n.bank, n.ch(nums), true
 	}
-	if m := bankNotation.FindStringSubmatch(s); m != nil {
-		ch, _ := strconv.Atoi(m[2])
-		return m[1], ch, true
-	}
-	return "", 0, false
+	return motu.ChannelRef(s)
 }
 
-func hostInFor(cfg Config, device, bank string, ch int) int {
+func hostInFor(cfg config.Config, device, bank string, ch int) int {
 	for _, h := range cfg.HostInputs {
 		from := cmp.Or(h.From, 1)
 		if h.Device == device && h.Bank == bank && ch >= from && ch < from+h.Count {
@@ -95,12 +107,12 @@ func hostInFor(cfg Config, device, bank string, ch int) int {
 	return 0
 }
 
-// LoadSheet reads the CSV export of the studio Google Sheet.
+// Load reads the CSV export of the studio Google Sheet.
 // Rows whose Interface is not listed in cfg.Interfaces are ignored.
-func LoadSheet(path string, cfg Config) ([]Input, error) {
+func Load(path string, cfg config.Config) ([]Input, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("sheet %s: %w (set \"sheet\" in %s or pass --sheet)", path, err, configName)
+		return nil, fmt.Errorf("sheet %s: %w (set \"sheet\" in %s or pass --sheet)", path, err, config.Name)
 	}
 	defer f.Close()
 
@@ -137,7 +149,7 @@ func LoadSheet(path string, cfg Config) ([]Input, error) {
 		if !known {
 			continue
 		}
-		bank, ch, ok := decodeInterfaceInput(raw)
+		bank, ch, ok := DecodeInterfaceInput(raw)
 		if !ok {
 			continue
 		}
@@ -151,7 +163,7 @@ func LoadSheet(path string, cfg Config) ([]Input, error) {
 			Bank:   bank,
 			Ch:     ch,
 			HostIn: hostInFor(cfg, device, bank, ch),
-			Label:  SanitizeHardwareName(label),
+			Label:  SanitizeName(label),
 			Stack:  get(rec, "Stack"),
 			Active: strings.EqualFold(get(rec, "Checked?"), "TRUE"),
 			Source: iface + " " + raw,
@@ -163,4 +175,20 @@ func LoadSheet(path string, cfg Config) ([]Input, error) {
 		})
 	}
 	return inputs, nil
+}
+
+// SanitizeName cleans strings to prevent MOTU hardware internal errors: underscores for spaces,
+// letters/digits/_/- only, at most 31 characters.
+func SanitizeName(rawName string) string {
+	spaced := strings.ReplaceAll(rawName, " ", "_")
+	sanitized := strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-' {
+			return r
+		}
+		return -1
+	}, spaced)
+	if len(sanitized) > 31 {
+		return sanitized[:31]
+	}
+	return sanitized
 }

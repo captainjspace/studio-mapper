@@ -19,7 +19,7 @@ test:
 
 build:
 	@echo "🏗️  Compiling native binary: $(BINARY_NAME)..."
-	go build -o $(BINARY_NAME) .
+	go build -o $(BINARY_NAME) ./cmd/studio-map
 
 # 2. Local Installation: Sets up the execution paths on your local machine
 install:

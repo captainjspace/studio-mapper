@@ -10,7 +10,7 @@ echo "Running full test suite..."
 go test -v ./...
 
 echo "Compiling binary..."
-go build -o studio-map .
+go build -o studio-map ./cmd/studio-map
 
 echo "Installing binary to local user path (~/.local/bin)..."
 mkdir -p ~/.local/bin

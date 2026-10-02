@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"cmp"
@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const configName = "studio_config.json"
+const Name = "studio_config.json"
 
 // Paths locates the config and everything it points at, so studio-map runs from any directory.
 type Paths struct {
@@ -21,16 +21,16 @@ type Paths struct {
 	PresetIndex string // optional; used when the preset library isn't on this machine
 }
 
-// abs resolves a config-relative path.
-func (p Paths) abs(rel string) string {
+// Abs resolves a config-relative path.
+func (p Paths) Abs(rel string) string {
 	if rel == "" || filepath.IsAbs(rel) {
 		return rel
 	}
 	return filepath.Join(p.Base, rel)
 }
 
-// configCandidates lists where the config is looked for, in order.
-func configCandidates(flag string) []string {
+// candidates lists where the config is looked for, in order.
+func candidates(flag string) []string {
 	var c []string
 	if flag != "" {
 		return []string{flag}
@@ -40,20 +40,20 @@ func configCandidates(flag string) []string {
 	}
 	if dir, err := os.Getwd(); err == nil {
 		for ; ; dir = filepath.Dir(dir) {
-			c = append(c, filepath.Join(dir, configName))
+			c = append(c, filepath.Join(dir, Name))
 			if dir == filepath.Dir(dir) {
 				break
 			}
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		c = append(c, filepath.Join(home, ".config", "studio-map", configName))
+		c = append(c, filepath.Join(home, ".config", "studio-map", Name))
 	}
 	return c
 }
 
-// takeFlag removes "--name value" (or "-name value") from args and returns the value.
-func takeFlag(args []string, name string) (string, []string) {
+// TakeFlag removes "--name value" (or "-name value") from args and returns the value.
+func TakeFlag(args []string, name string) (string, []string) {
 	for i, a := range args {
 		if (a == "--"+name || a == "-"+name) && i+1 < len(args) {
 			return args[i+1], slices.Delete(slices.Clone(args), i, i+2)
@@ -62,8 +62,9 @@ func takeFlag(args []string, name string) (string, []string) {
 	return "", args
 }
 
-func resolvePaths(flag string, cfg func(path string) (Config, error)) (Paths, Config, error) {
-	tried := configCandidates(flag)
+// Resolve finds the config (--config, $STUDIO_MAP_CONFIG, here or a parent folder, ~/.config/studio-map) and loads it.
+func Resolve(flag string) (Paths, Config, error) {
+	tried := candidates(flag)
 	for _, path := range tried {
 		if _, err := os.Stat(path); err != nil {
 			continue
@@ -72,27 +73,15 @@ func resolvePaths(flag string, cfg func(path string) (Config, error)) (Paths, Co
 		if err != nil {
 			return Paths{}, Config{}, err
 		}
-		c, err := cfg(real)
+		c, err := Load(real)
 		if err != nil {
 			return Paths{}, Config{}, err
 		}
-		base := filepath.Dir(real)
-		abs := func(p string) string {
-			if filepath.IsAbs(p) {
-				return p
-			}
-			return filepath.Join(base, p)
-		}
-		p := Paths{
-			Config: real,
-			Base:   base,
-			State:  abs(cmp.Or(c.StateDir, "state")),
-		}
-		if c.PresetIndex != "" {
-			p.PresetIndex = abs(c.PresetIndex)
-		}
+		p := Paths{Config: real, Base: filepath.Dir(real)}
+		p.State = p.Abs(cmp.Or(c.StateDir, "state"))
+		p.PresetIndex = p.Abs(c.PresetIndex)
 		return p, c, nil
 	}
 	return Paths{}, Config{}, fmt.Errorf("no %s found; looked in:\n  %s\nset --config <path> or STUDIO_MAP_CONFIG, or run `make install` to link ~/.config/studio-map/%s",
-		configName, strings.Join(tried, "\n  "), configName)
+		Name, strings.Join(tried, "\n  "), Name)
 }

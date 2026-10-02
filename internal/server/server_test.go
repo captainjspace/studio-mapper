@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding/json"
@@ -9,14 +9,18 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"studio/engine/internal/config"
+	"studio/engine/internal/export"
+	"studio/engine/internal/mix"
 )
 
 // testRepo writes a minimal config + sheet + preset index, with no preset library on disk (like the container).
-func testRepo(t *testing.T) Paths {
+func testRepo(t *testing.T) config.Paths {
 	t.Helper()
 	dir := t.TempDir()
 	files := map[string]string{
-		configName: `{"preset_index": "data/presets.txt", "preset_dir": "/nonexistent", "default_rig": "oakland",
+		config.Name: `{"preset_index": "data/presets.txt", "preset_dir": "/nonexistent", "default_rig": "oakland",
 			"rigs": {
 				"oakland": {"sheet": "data/inputs.csv", "interfaces": {"Motu 16A": "16a"},
 					"host_inputs": [{"device": "16a", "bank": "Analog", "count": 16, "host_start": 1}]},
@@ -34,7 +38,7 @@ func testRepo(t *testing.T) Paths {
 			t.Fatal(err)
 		}
 	}
-	p, _, err := resolvePaths(filepath.Join(dir, configName), loadConfig)
+	p, _, err := config.Resolve(filepath.Join(dir, config.Name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +57,7 @@ func get(t *testing.T, srv *httptest.Server, path string) (int, string) {
 }
 
 func TestServer(t *testing.T) {
-	srv := httptest.NewServer(newServer(testRepo(t)))
+	srv := httptest.NewServer(New(testRepo(t)))
 	defer srv.Close()
 
 	if code, body := get(t, srv, "/healthz"); code != 200 || body != "ok\n" {
@@ -64,12 +68,12 @@ func TestServer(t *testing.T) {
 	}
 
 	code, body := get(t, srv, "/api/routing")
-	var doc RoutingDoc
+	var doc export.RoutingDoc
 	if err := json.Unmarshal([]byte(body), &doc); code != 200 || err != nil {
 		t.Fatalf("/api/routing = %d %v: %s", code, err, body)
 	}
 	kick := findNode(doc.Root, "kick")
-	if doc.Version != 1 || doc.Root.Name != stereoOut || kick == nil || kick.Tracks[0].ChannelPreset != "Track/Kick In.cst" {
+	if doc.Version != 1 || doc.Root.Name != mix.StereoOut || kick == nil || kick.Tracks[0].ChannelPreset != "Track/Kick In.cst" {
 		t.Errorf("routing doc should come from the sheet with presets matched via the index, got %+v", doc.Root)
 	}
 	if drums := findNode(doc.Root, "drums"); drums == nil || drums.Preset != "Bus/drums.cst" {
@@ -80,7 +84,7 @@ func TestServer(t *testing.T) {
 		t.Errorf("/studio-data.js = %d %.40q", code, body)
 	}
 	code, body = get(t, srv, "/api/inputs")
-	var inputs InputsDoc
+	var inputs export.InputsDoc
 	if err := json.Unmarshal([]byte(body), &inputs); code != 200 || err != nil || len(inputs.Inputs) != 1 {
 		t.Fatalf("/api/inputs = %d %v: %s", code, err, body)
 	}
@@ -88,7 +92,7 @@ func TestServer(t *testing.T) {
 		t.Errorf("input row = %+v", in)
 	}
 	code, body = get(t, srv, "/api/inputs?rig=home")
-	var home InputsDoc
+	var home export.InputsDoc
 	if err := json.Unmarshal([]byte(body), &home); code != 200 || err != nil || home.Rig != "home" || len(home.Inputs) != 1 || home.Inputs[0].HostIn != 5 {
 		t.Errorf("/api/inputs?rig=home = %d %v: %s", code, err, body)
 	}
@@ -101,4 +105,16 @@ func TestServer(t *testing.T) {
 	if code, _ := get(t, srv, "/nope"); code != 404 {
 		t.Errorf("unknown path should 404, got %d", code)
 	}
+}
+
+func findNode(n *export.NodeJSON, name string) *export.NodeJSON {
+	if n == nil || n.Name == name {
+		return n
+	}
+	for _, k := range n.Children {
+		if f := findNode(k, name); f != nil {
+			return f
+		}
+	}
+	return nil
 }

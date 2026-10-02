@@ -1,34 +1,30 @@
-package main
+// Package server serves the docs page and the routing/inputs JSON, regenerated from the sheet and config on every request.
+package server
 
 import (
 	"cmp"
-	_ "embed"
 	"encoding/json"
-	"fmt"
 	"net/http"
+
+	"studio/engine/docs"
+	"studio/engine/internal/config"
+	"studio/engine/internal/export"
+	"studio/engine/internal/mix"
+	"studio/engine/internal/presets"
+	"studio/engine/internal/sheet"
 )
 
-//go:embed docs/index.html
-var indexHTML []byte
-
-// runServe serves the docs page and the routing JSON, regenerated from the sheet and config on every request.
-func runServe(args []string) error {
-	addr, _ := takeFlag(args, "addr")
-	addr = cmp.Or(addr, ":8080")
-	fmt.Printf("studio-map serving on %s (config %s)\n", addr, env.paths.Config)
-	return http.ListenAndServe(addr, newServer(env.paths))
-}
-
-func newServer(p Paths) http.Handler {
+// New returns the HTTP handler. The server never auto-detects a rig; ?rig= picks one (default: the config's default).
+func New(p config.Paths) http.Handler {
 	// rigConfig re-reads the config and selects ?rig= (default: the config's default rig)
-	rigConfig := func(r *http.Request) (Paths, Config, error) {
-		cfg, err := loadConfig(p.Config)
+	rigConfig := func(r *http.Request) (config.Paths, config.Config, error) {
+		cfg, err := config.Load(p.Config)
 		if err != nil {
 			return p, cfg, err
 		}
-		cfg, err = cfg.withRig(cmp.Or(r.URL.Query().Get("rig"), cfg.defaultRig()))
+		cfg, err = cfg.WithRig(cmp.Or(r.URL.Query().Get("rig"), cfg.DefaultRigName()))
 		rp := p
-		rp.Sheet = p.abs(cfg.Sheet)
+		rp.Sheet = p.Abs(cfg.Sheet)
 		return rp, cfg, err
 	}
 	routing := func(r *http.Request) (any, error) {
@@ -36,26 +32,26 @@ func newServer(p Paths) http.Handler {
 		if err != nil {
 			return nil, err
 		}
-		g, presets, mode, problems, err := buildRouting(rp, cfg, r.URL.Query().Has("stems"))
+		g, lib, mode, problems, err := mix.BuildRouting(rp, cfg, r.URL.Query().Has("stems"))
 		if err != nil {
 			return nil, err
 		}
-		return routingDoc(cfg.RigName, g, presets, mode, problems), nil
+		return export.Routing(cfg.RigName, g, lib, mode, problems), nil
 	}
 	inputs := func(r *http.Request) (any, error) {
 		rp, cfg, err := rigConfig(r)
 		if err != nil {
 			return nil, err
 		}
-		in, err := LoadSheet(rp.Sheet, cfg)
+		in, err := sheet.Load(rp.Sheet, cfg)
 		if err != nil {
 			return nil, err
 		}
-		return inputsDoc(cfg.RigName, in, presetsFor(rp, cfg)), nil
+		return export.Inputs(cfg.RigName, in, presets.For(rp, cfg)), nil
 	}
 	rigs := func(r *http.Request) (any, error) {
-		cfg, err := loadConfig(p.Config)
-		return map[string]any{"default": cfg.defaultRig(), "rigs": sortedKeys(cfg.Rigs)}, err
+		cfg, err := config.Load(p.Config)
+		return map[string]any{"default": cfg.DefaultRigName(), "rigs": cfg.RigNames()}, err
 	}
 	// serve renders a fresh document per request; wrap adapts it (e.g. into a script for the page)
 	serve := func(contentType string, wrap func([]byte) []byte, doc func(*http.Request) (any, error)) http.HandlerFunc {
@@ -80,7 +76,7 @@ func newServer(p Paths) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(indexHTML)
+		_, _ = w.Write(docs.IndexHTML)
 	})
 	mux.HandleFunc("GET /api/routing", serve("application/json", asIs, routing))
 	mux.HandleFunc("GET /api/inputs", serve("application/json", asIs, inputs))

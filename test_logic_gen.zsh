@@ -3,7 +3,7 @@
 #go mod init studio/engine
 
 # build 
-go build -o studio-map .
+go build -o studio-map ./cmd/studio-map
 
 #test all
 go test -v ./...

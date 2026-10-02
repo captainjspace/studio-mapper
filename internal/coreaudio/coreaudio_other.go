@@ -1,9 +1,9 @@
 //go:build !darwin
 
-package main
+package coreaudio
 
 import "fmt"
 
-func hostInNames(device string) ([]string, error) {
+func HostInNames(device string) ([]string, error) {
 	return nil, fmt.Errorf("CoreAudio is only available on macOS")
 }

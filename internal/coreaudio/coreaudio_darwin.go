@@ -1,4 +1,5 @@
-package main
+// Package coreaudio reads the input channel names macOS (and therefore Logic) sees for an audio device.
+package coreaudio
 
 /*
 #cgo LDFLAGS: -framework CoreAudio -framework CoreFoundation
@@ -56,8 +57,8 @@ import (
 	"unsafe"
 )
 
-// hostInNames returns the input channel names CoreAudio (and therefore Logic) sees for a device.
-func hostInNames(device string) ([]string, error) {
+// HostInNames returns the input channel names CoreAudio (and therefore Logic) sees for a device.
+func HostInNames(device string) ([]string, error) {
 	cname := C.CString(device)
 	defer C.free(unsafe.Pointer(cname))
 	dev := C.findDevice(cname)

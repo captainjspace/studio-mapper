@@ -1,8 +1,13 @@
-package main
+package export
 
 import (
 	"encoding/json"
 	"testing"
+
+	"studio/engine/internal/mix"
+	"studio/engine/internal/mix/mixtest"
+	"studio/engine/internal/presets/presetstest"
+	"studio/engine/internal/sheet"
 )
 
 // roundTrip marshals the doc and decodes it back, as the band app would read it.
@@ -32,17 +37,17 @@ func findNode(n *NodeJSON, name string) *NodeJSON {
 }
 
 func TestRoutingDocSession(t *testing.T) {
-	inputs := append([]Input{}, mixInputs...)
+	inputs := mixtest.Inputs()
 	inputs[2].Musician, inputs[2].SoundSource, inputs[2].Mic, inputs[2].Preamp, inputs[2].Source = "Erick", "Kick In", "Audix D6", "API 3124", "Motu 16A A3"
-	presets := testPresets(t, "Track/Kick In.cst")
-	g := buildMixGraph(mixConfig(), inputs, presets)
+	presets := presetstest.Library(t, "Track/Kick In.cst")
+	g := mix.Build(mixtest.Config(), inputs, presets)
 
-	doc := roundTrip(t, routingDoc("oakland", g, presets, "session", validateMix(g, presets)))
+	doc := roundTrip(t, Routing("oakland", g, presets, "session", mix.Validate(g, presets)))
 
 	if doc.Version != 1 || doc.Mode != "session" {
 		t.Errorf("version/mode = %d/%s", doc.Version, doc.Mode)
 	}
-	if doc.Root == nil || doc.Root.Name != stereoOut || len(doc.Root.Children) != 1 || doc.Root.Children[0].Name != mixBus {
+	if doc.Root == nil || doc.Root.Name != mix.StereoOut || len(doc.Root.Children) != 1 || doc.Root.Children[0].Name != mix.MixBus {
 		t.Fatalf("want Stereo_Out → Mix_Bus at the root, got %+v", doc.Root)
 	}
 	drums := findNode(doc.Root, "drums")
@@ -70,14 +75,14 @@ func TestRoutingDocSession(t *testing.T) {
 }
 
 func TestRoutingDocStems(t *testing.T) {
-	cfg := mixConfig()
+	cfg := mixtest.Config()
 	cfg.StemSplit = map[string]string{"Drums": "drums", "Vocals": "Screaming_Demons"}
-	presets := testPresets(t)
-	g := buildMixGraph(cfg, stemInputs(cfg), presets)
+	presets := presetstest.Library(t)
+	g := mix.Build(cfg, sheet.StemInputs(cfg), presets)
 	g.Partial = true
-	g.pruneEmptyStacks()
+	g.PruneEmptyStacks()
 
-	doc := roundTrip(t, routingDoc("oakland", g, presets, "stems", nil))
+	doc := roundTrip(t, Routing("oakland", g, presets, "stems", nil))
 	drums := findNode(doc.Root, "drums")
 	if drums == nil || len(drums.Tracks) != 1 {
 		t.Fatalf("drums should hold the drum stem, got %+v", drums)

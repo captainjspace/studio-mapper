@@ -1,8 +1,10 @@
-package main
+package mix
 
 import (
 	"fmt"
 	"strings"
+
+	"studio/engine/internal/presets"
 )
 
 func (n *Node) describe() string {
@@ -25,27 +27,27 @@ func (n *Node) describe() string {
 	return strings.Join(parts, "  ")
 }
 
-// GenerateConsoleBlueprint prints the signal flow from Stereo_Out back to every track.
-func GenerateConsoleBlueprint(g MixGraph) {
+// PrintBlueprint prints the signal flow from Stereo_Out back to every track.
+func PrintBlueprint(g Graph) {
 	fmt.Println("\n🎛️  LOGIC SIGNAL FLOW")
-	out, ok := g.Nodes[stereoOut]
+	out, ok := g.Nodes[StereoOut]
 	if !ok {
-		fmt.Printf(" (no %s in mix config)\n", stereoOut)
+		fmt.Printf(" (no %s in mix config)\n", StereoOut)
 		return
 	}
 	fmt.Printf(" 🔊 %s  %s\n", out.Name, out.describe())
 	printBranch(g, out, " ")
 }
 
-func printBranch(g MixGraph, n *Node, indent string) {
-	kids := g.children(n.Name)
+func printBranch(g Graph, n *Node, indent string) {
+	kids := g.Children(n.Name)
 	for i, k := range kids {
 		last := i == len(kids)-1 && len(n.Tracks) == 0
 		fmt.Printf("%s%s 📂 %s  %s\n", indent, branch(last), k.Name, k.describe())
 		printBranch(g, k, indent+stem(last))
 	}
 	for i, t := range n.Tracks {
-		fmt.Printf("%s%s %-6s %s\n", indent, branch(i == len(n.Tracks)-1), t.where(), t.Label)
+		fmt.Printf("%s%s %-6s %s\n", indent, branch(i == len(n.Tracks)-1), t.Where(), t.Label)
 	}
 }
 
@@ -63,15 +65,15 @@ func stem(last bool) string {
 	return "│   "
 }
 
-// printRouting prints the build sheet: what to set on each strip in the Logic template.
-func printRouting(g MixGraph, presets Presets) {
+// PrintRouting prints the build sheet: what to set on each strip in the Logic template.
+func PrintRouting(g Graph, lib presets.Presets) {
 	fmt.Println("\n── TRACKS (Input → Output, channel preset)")
 	fmt.Printf("  %-6s %-16s %-24s %s\n", "Input", "Track", "Output", "Channel preset")
 	for _, name := range g.Order {
 		n := g.Nodes[name]
 		for _, t := range n.Tracks {
-			rel, _ := presets.find("Track", t.Label)
-			fmt.Printf("  %-6s %-16s %-24s %s\n", t.where(), t.Label, busLabel(g, name), cmpOrDash(rel, ""))
+			rel, _ := lib.Find("Track", t.Label)
+			fmt.Printf("  %-6s %-16s %-24s %s\n", t.Where(), t.Label, busLabel(g, name), cmpOrDash(rel, ""))
 		}
 	}
 
@@ -118,7 +120,7 @@ func busNum(n *Node) string {
 	return fmt.Sprintf("Bus %d", n.Bus)
 }
 
-func busLabel(g MixGraph, name string) string {
+func busLabel(g Graph, name string) string {
 	n, ok := g.Nodes[name]
 	switch {
 	case !ok:

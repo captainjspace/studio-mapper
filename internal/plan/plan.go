@@ -1,10 +1,18 @@
-package main
+// Package plan compares a rig's declared state (sheet + config) with the live devices and applies the differences.
+package plan
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
+
+	"studio/engine/internal/config"
+	"studio/engine/internal/mix"
+	"studio/engine/internal/motu"
+	"studio/engine/internal/presets"
+	"studio/engine/internal/sheet"
 )
 
 type Status string
@@ -38,9 +46,9 @@ type Plan struct {
 
 // Live is everything read from the rack before planning.
 type Live struct {
-	Datastores map[string]Datastore // reachable datastore devices only
-	HostNames  []string             // CoreAudio input names of the host device; nil if unreadable
-	Presets    Presets
+	Datastores map[string]motu.Datastore // reachable datastore devices only
+	HostNames  []string                  // CoreAudio input names of the host device; nil if unreadable
+	Presets    presets.Presets
 	Known      map[string]bool // stacks used by any rig's sheet
 }
 
@@ -61,7 +69,7 @@ func (p *Plan) check(scope, target, current, desired string, same bool, dev, key
 	p.Writes[dev][key] = value
 }
 
-func (p Plan) count(s Status) int {
+func (p Plan) Count(s Status) int {
 	n := 0
 	for _, st := range p.Steps {
 		if st.Status == s {
@@ -71,20 +79,10 @@ func (p Plan) count(s Status) int {
 	return n
 }
 
-func activeInputs(inputs []Input) []Input {
-	var out []Input
-	for _, in := range inputs {
-		if in.Active {
-			out = append(out, in)
-		}
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].HostIn < out[j].HostIn })
-	return out
-}
-
-func buildPlan(cfg Config, inputs []Input, live Live) Plan {
+// Build compares the declared state with what was read live.
+func Build(cfg config.Config, inputs []sheet.Input, live Live) Plan {
 	p := Plan{Writes: map[string]map[string]string{}}
-	active := activeInputs(inputs)
+	active := sheet.ActiveInputs(inputs)
 
 	planValidation(&p, cfg, active)
 	planDeviceNames(&p, cfg, active, live)
@@ -92,12 +90,12 @@ func buildPlan(cfg Config, inputs []Input, live Live) Plan {
 	planRoutes(&p, cfg, live)
 	planStreams(&p, cfg, live)
 	planHostNames(&p, cfg, active, live)
-	planMix(&p, rigMixGraph(cfg, inputs, live.Presets, live.Known), active, live.Presets)
+	planMix(&p, mix.RigGraph(cfg, inputs, live.Presets, live.Known), active, live.Presets)
 	return p
 }
 
-func planValidation(p *Plan, cfg Config, active []Input) {
-	seen := map[int]Input{}
+func planValidation(p *Plan, cfg config.Config, active []sheet.Input) {
+	seen := map[int]sheet.Input{}
 	for _, in := range active {
 		if in.HostIn == 0 {
 			p.add(StatusWarn, "sheet", fmt.Sprintf("row %d %s", in.Row, in.Source), "", in.Label+": not routed to the host")
@@ -110,8 +108,8 @@ func planValidation(p *Plan, cfg Config, active []Input) {
 	}
 }
 
-func planDeviceNames(p *Plan, cfg Config, active []Input, live Live) {
-	for _, dev := range sortedKeys(cfg.Devices) {
+func planDeviceNames(p *Plan, cfg config.Config, active []sheet.Input, live Live) {
+	for _, dev := range slices.Sorted(maps.Keys(cfg.Devices)) {
 		url := cfg.Devices[dev]
 		if url == "" {
 			continue
@@ -126,51 +124,51 @@ func planDeviceNames(p *Plan, cfg Config, active []Input, live Live) {
 				continue
 			}
 			target := fmt.Sprintf("%s %d (Host In %d)", in.Bank, in.Ch, in.HostIn)
-			bank, ok := ds.bankIndex(in.Bank)
+			bank, ok := ds.BankIndex(in.Bank)
 			if !ok {
 				p.add(StatusWarn, dev, target, "", "no input bank named "+in.Bank)
 				continue
 			}
-			key := inputNamePath(bank, in.Ch)
-			current := ds.str(key)
+			key := motu.InputNamePath(bank, in.Ch)
+			current := ds.Str(key)
 			p.check(dev, target, current, in.Label, current == in.Label, dev, key, in.Label)
 		}
 	}
 }
 
 // planOutputs manages output names declared in the rig's "outputs".
-func planOutputs(p *Plan, cfg Config, live Live) {
-	for _, dev := range sortedKeys(cfg.Outputs) {
+func planOutputs(p *Plan, cfg config.Config, live Live) {
+	for _, dev := range slices.Sorted(maps.Keys(cfg.Outputs)) {
 		ds, ok := live.Datastores[dev]
 		if !ok {
 			continue // offline is already reported for the device
 		}
 		scope := dev + " outputs"
-		for _, dest := range sortedKeys(cfg.Outputs[dev]) {
-			want := SanitizeHardwareName(cfg.Outputs[dev][dest])
-			key, err := ds.channelKey("obank", dest, "name")
+		for _, dest := range slices.Sorted(maps.Keys(cfg.Outputs[dev])) {
+			want := sheet.SanitizeName(cfg.Outputs[dev][dest])
+			key, err := ds.ChannelKey("obank", dest, "name")
 			if err != nil {
 				p.add(StatusWarn, scope, dest, "", err.Error())
 				continue
 			}
-			current := ds.str(key)
+			current := ds.Str(key)
 			p.check(scope, dest, current, want, current == want, dev, key, want)
 		}
 	}
 }
 
 // planRoutes manages router sources declared in the rig's "routes" and flags undeclared computer loopbacks.
-func planRoutes(p *Plan, cfg Config, live Live) {
-	for _, dev := range sortedKeys(live.Datastores) {
+func planRoutes(p *Plan, cfg config.Config, live Live) {
+	for _, dev := range slices.Sorted(maps.Keys(live.Datastores)) {
 		ds, routes := live.Datastores[dev], cfg.Routes[dev]
 		scope := dev + " routes"
-		for _, dest := range sortedKeys(routes) {
-			key, err := ds.channelKey("obank", dest, "src")
+		for _, dest := range slices.Sorted(maps.Keys(routes)) {
+			key, err := ds.ChannelKey("obank", dest, "src")
 			if err == nil {
 				var want string
-				if want, err = ds.sourceValue(routes[dest]); err == nil {
-					current := ds.str(key)
-					p.check(scope, dest+" ←", ds.sourceLabel(current), routes[dest], current == want, dev, key, want)
+				if want, err = ds.SourceValue(routes[dest]); err == nil {
+					current := ds.Str(key)
+					p.check(scope, dest+" ←", ds.SourceLabel(current), routes[dest], current == want, dev, key, want)
 					continue
 				}
 			}
@@ -183,9 +181,9 @@ func planRoutes(p *Plan, cfg Config, live Live) {
 }
 
 // computerLoopbacks lists "To Computer N" channels fed from "From Computer", skipping declared routes.
-func computerLoopbacks(ds Datastore, routes map[string]string) string {
-	to, ok1 := ds.bankIdx("obank", "Computer")
-	from, ok2 := ds.bankIdx("ibank", "Computer")
+func computerLoopbacks(ds motu.Datastore, routes map[string]string) string {
+	to, ok1 := ds.BankIdx("obank", "Computer")
+	from, ok2 := ds.BankIdx("ibank", "Computer")
 	if !ok1 || !ok2 {
 		return ""
 	}
@@ -222,7 +220,7 @@ func compactRanges(ns []int) string {
 }
 
 // planStreams checks that the host's AVB input streams listen to the talkers host_inputs expects.
-func planStreams(p *Plan, cfg Config, live Live) {
+func planStreams(p *Plan, cfg config.Config, live Live) {
 	scope := cfg.HostDevice + " streams"
 	for _, h := range cfg.HostInputs {
 		if h.AVBStream == 0 {
@@ -232,16 +230,16 @@ func planStreams(p *Plan, cfg Config, live Live) {
 		if !ok {
 			continue
 		}
-		listener, found := talker.avbEntity(cfg.HostDevice)
+		listener, found := talker.AVBEntity(cfg.HostDevice)
 		if !found {
 			p.add(StatusWarn, scope, cfg.HostDevice, "", "not visible on the AVB network from "+h.Device)
 			continue
 		}
-		uid := talker.str("uid")
+		uid := talker.Str("uid")
 		for i := 0; i < (h.Count+7)/8; i++ {
 			stream := h.AVBStream + i
 			want := uid + ":" + strconv.Itoa(i)
-			current := talker.streamTalker(listener, stream)
+			current := talker.StreamTalker(listener, stream)
 			status := StatusOK
 			if current != want {
 				status = StatusManual
@@ -252,7 +250,7 @@ func planStreams(p *Plan, cfg Config, live Live) {
 	}
 }
 
-func planHostNames(p *Plan, cfg Config, active []Input, live Live) {
+func planHostNames(p *Plan, cfg config.Config, active []sheet.Input, live Live) {
 	scope := cfg.HostDevice + " Host In"
 	if live.HostNames == nil {
 		p.add(StatusWarn, scope, cfg.HostDevice, "", "CoreAudio names unreadable: is the "+cfg.HostDevice+" connected?")
@@ -272,10 +270,10 @@ func planHostNames(p *Plan, cfg Config, active []Input, live Live) {
 }
 
 // planMix reports broken routes and lists the channel strip settings to load in Logic.
-func planMix(p *Plan, g MixGraph, active []Input, presets Presets) {
+func planMix(p *Plan, g mix.Graph, active []sheet.Input, lib presets.Presets) {
 	const scope = "Logic mix"
 	problems := map[string]bool{}
-	for _, pr := range validateMix(g, presets) {
+	for _, pr := range mix.Validate(g, lib) {
 		p.add(StatusWarn, scope, pr[0], "", pr[1])
 		problems[pr[0]] = true
 	}
@@ -293,7 +291,7 @@ func planMix(p *Plan, g MixGraph, active []Input, presets Presets) {
 		}
 	}
 	for _, in := range active {
-		if rel, ok := presets.find("Track", in.Label); ok {
+		if rel, ok := lib.Find("Track", in.Label); ok {
 			p.add(StatusManual, scope, "track "+in.Label, "", rel)
 		}
 	}
@@ -305,7 +303,7 @@ func friendlyTalker(talker string, live Live) string {
 		return "(not connected)"
 	}
 	for dev, ds := range live.Datastores {
-		if ds.str("uid") == uid {
+		if ds.Str("uid") == uid {
 			n, _ := strconv.Atoi(idx)
 			return fmt.Sprintf("%s stream %d", dev, n+1)
 		}
@@ -313,7 +311,8 @@ func friendlyTalker(talker string, live Live) string {
 	return talker
 }
 
-func printPlan(p Plan, verbose bool) {
+// Print shows the plan; ok rows only with verbose.
+func Print(p Plan, verbose bool) {
 	scope := ""
 	for _, s := range p.Steps {
 		if s.Status == StatusOK && !verbose {
@@ -326,14 +325,5 @@ func printPlan(p Plan, verbose bool) {
 		fmt.Printf("  %s %-28s %-24q → %q\n", statusIcon[s.Status], s.Target, s.Current, s.Desired)
 	}
 	fmt.Printf("\nPlan: %d ok, %d to change, %d manual (CueMix/Logic), %d warnings\n",
-		p.count(StatusOK), p.count(StatusChange), p.count(StatusManual), p.count(StatusWarn))
-}
-
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
+		p.Count(StatusOK), p.Count(StatusChange), p.Count(StatusManual), p.Count(StatusWarn))
 }

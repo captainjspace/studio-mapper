@@ -1,4 +1,4 @@
-package main
+package plan
 
 import (
 	"net/http"
@@ -6,11 +6,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"studio/engine/internal/config"
+	"studio/engine/internal/motu"
+	"studio/engine/internal/motu/motutest"
 )
 
 // newFakeUltraLite serves a small UltraLite-like datastore: inputs, an aux bus, computer loopbacks.
-func newFakeUltraLite() *fakeMOTU {
-	ds := Datastore{
+func newFakeUltraLite() *motutest.Fake {
+	ds := motu.Datastore{
 		"uid":              "0001f2fffe004524",
 		"ext/ibank/0/name": "Analog", "ext/ibank/1/name": "Mix Aux", "ext/ibank/2/name": "Computer",
 		"ext/obank/0/name": "Analog", "ext/obank/1/name": "Computer",
@@ -19,33 +23,7 @@ func newFakeUltraLite() *fakeMOTU {
 		"ext/obank/1/ch/1/src": "2:1", // To Computer 2 <- From Computer 2 (undeclared loopback)
 		"ext/obank/1/ch/2/src": "2:2", // To Computer 3 <- From Computer 3 (declared print path)
 	}
-	return &fakeMOTU{ds: ds}
-}
-
-func TestDetectRig(t *testing.T) {
-	home := httptest.NewServer(newFakeUltraLite())
-	defer home.Close()
-	client := &http.Client{Timeout: time.Second}
-	cfg := Config{Rigs: map[string]Rig{
-		"oakland": {Devices: map[string]string{"16a": "http://127.0.0.1:1"}},
-		"home":    {Devices: map[string]string{"ultralite": home.URL}},
-	}}
-
-	if got, err := detectRig(cfg, client); err != nil || got != "home" {
-		t.Errorf("detect = %q %v, want home", got, err)
-	}
-	cfg.Rigs["oakland"] = Rig{Devices: map[string]string{"16a": home.URL}}
-	if _, err := detectRig(cfg, client); err == nil || !strings.Contains(err.Error(), "more than one") {
-		t.Errorf("two answering rigs should ask for --rig, got %v", err)
-	}
-	cfg.Rigs = map[string]Rig{"oakland": {Devices: map[string]string{"16a": "http://127.0.0.1:1"}}}
-	if _, err := detectRig(cfg, client); err == nil || !strings.Contains(err.Error(), "--rig") {
-		t.Errorf("nothing answering should ask for --rig, got %v", err)
-	}
-	t.Setenv("STUDIO_MAP_RIG", "home")
-	if got, _ := chooseRig(cfg, "", true); got != "home" {
-		t.Errorf("STUDIO_MAP_RIG should win over detection, got %q", got)
-	}
+	return &motutest.Fake{DS: ds}
 }
 
 func TestPlanOutputsRoutesApplyRestore(t *testing.T) {
@@ -53,22 +31,22 @@ func TestPlanOutputsRoutesApplyRestore(t *testing.T) {
 	srv := httptest.NewServer(fake)
 	defer srv.Close()
 	client := &http.Client{Timeout: time.Second}
-	cfg := Config{
+	cfg := config.Config{
 		Devices: map[string]string{"ultralite": srv.URL},
 		Outputs: map[string]map[string]string{"ultralite": {"Analog 1": "1176 Send L"}},
 		Routes: map[string]map[string]string{"ultralite": {
 			"Analog 1": "Mix Aux 5", "Computer 3": "Computer 3", "Computer 9": "Nowhere 1"}},
 	}
 	read := func() Live {
-		ds, err := fetchDatastore(client, srv.URL)
+		ds, err := motu.Fetch(client, srv.URL)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return Live{Datastores: map[string]Datastore{"ultralite": ds}}
+		return Live{Datastores: map[string]motu.Datastore{"ultralite": ds}}
 	}
 
 	before := read()
-	p := buildPlan(cfg, nil, before)
+	p := Build(cfg, nil, before)
 	steps := map[string]Step{}
 	for _, s := range p.Steps {
 		steps[s.Scope+"|"+s.Target] = s
@@ -92,26 +70,26 @@ func TestPlanOutputsRoutesApplyRestore(t *testing.T) {
 		t.Errorf("writes = %v", got)
 	}
 
-	snapPath, err := saveSnapshot(t.TempDir(), "ultralite", srv.URL, before.Datastores["ultralite"])
+	snapPath, err := SaveSnapshot(t.TempDir(), "ultralite", srv.URL, before.Datastores["ultralite"])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := writeKeys(client, srv.URL, p.Writes["ultralite"]); err != nil {
+	if err := motu.WriteKeys(client, srv.URL, p.Writes["ultralite"]); err != nil {
 		t.Fatal(err)
 	}
-	if again := buildPlan(cfg, nil, read()); again.count(StatusChange) != 0 {
+	if again := Build(cfg, nil, read()); again.Count(StatusChange) != 0 {
 		t.Errorf("plan after apply should be clean, got %v", again.Writes)
 	}
 
-	snap, err := loadSnapshot(snapPath)
+	snap, err := LoadSnapshot(snapPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := writeKeys(client, srv.URL, changedNames(read().Datastores["ultralite"], snap.Names)); err != nil {
+	if err := motu.WriteKeys(client, srv.URL, read().Datastores["ultralite"].Changed(snap.Names)); err != nil {
 		t.Fatal(err)
 	}
-	if fake.ds["ext/obank/0/ch/0/src"] != "" || fake.ds["ext/obank/0/ch/0/name"] != "" {
-		t.Errorf("restore should put the route and name back, got src=%v name=%v", fake.ds["ext/obank/0/ch/0/src"], fake.ds["ext/obank/0/ch/0/name"])
+	if fake.Get("ext/obank/0/ch/0/src") != "" || fake.Get("ext/obank/0/ch/0/name") != "" {
+		t.Errorf("restore should put the route and name back, got src=%v name=%v", fake.Get("ext/obank/0/ch/0/src"), fake.Get("ext/obank/0/ch/0/name"))
 	}
 }
 
