@@ -91,8 +91,8 @@
       },
       "routes": {
         "ultralite": {
-          "Analog 1": "Computer 5",
-          "Analog 2": "Computer 6",
+          "Analog 1": "Computer 3",
+          "Analog 2": "Computer 4",
           "Computer 5": "Analog 1",
           "Computer 6": "Analog 2",
           "Computer 13": "Computer 3",
@@ -149,8 +149,8 @@
       "plugin": "UA 2-1176 (hardware, recorded back as a stereo track)",
       "insert": {
         "rig": "home",
-        "out": "Logic stereo out 5/6 \u2192 Analog Out 1/2 \u2192 1176",
-        "in": "Analog In 1/2 (jacks 5/6) \u2192 record in 5/6"
+        "out": "Logic out 3/4 \u2192 Line Out 1/2 (jacks 3/4) \u2192 1176",
+        "in": "Line In 1/2 (jacks 5/6) \u2192 record in 5/6"
       }
     },
     "Stereo_Out": {
