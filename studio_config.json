@@ -1,4 +1,6 @@
 {
+  "sheet": "data/studio-inputs.csv",
+  "state_dir": "state",
   "devices": {
     "16a": "http://16a.local",
     "24ai": "http://24ai.local",

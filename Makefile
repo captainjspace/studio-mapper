@@ -20,6 +20,8 @@ install:
 	@echo "💾 Installing execution artifact into user pathway..."
 	mkdir -p $(INSTALL_DIR)
 	cp $(BINARY_NAME) $(INSTALL_DIR)/$(BINARY_NAME)
+	mkdir -p $(HOME)/.config/studio-map
+	ln -sf $(CURDIR)/studio_config.json $(HOME)/.config/studio-map/studio_config.json
 	@echo "🏁 Local compilation complete. Call '$(BINARY_NAME)' from any terminal workspace."
 
 # 3. Read the rack and show what would change (read-only)

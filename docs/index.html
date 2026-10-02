@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studio Map Viewer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Font Awesome for Icons (No SVG files used) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* Custom Utilities */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .code-block {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .pointer-box {
+            transition: all 0.3s ease;
+        }
+        .pointer-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body class="bg-stone-50 text-stone-800 font-sans antialiased min-h-screen flex flex-col md:flex-row">
+
+    <!-- Mobile Navigation Toggle -->
+    <div class="md:hidden bg-stone-900 text-white p-4 flex justify-between items-center">
+        <h1 class="font-bold text-lg">Studio Map Companion</h1>
+        <button id="mobile-menu-btn" class="text-stone-300 hover:text-white focus:outline-none">
+            <i class="fas fa-bars text-xl"></i>
+        </button>
+    </div>
+
+    <!-- Sidebar Navigation -->
+    <nav id="sidebar" class="hidden md:flex flex-col w-full md:w-64 bg-stone-900 text-stone-300 min-h-screen fixed md:sticky top-0 z-50 transition-all duration-300">
+        <div class="p-6 border-b border-stone-800">
+            <h1 class="text-2xl font-bold text-white tracking-tight">Studio Map<span class="text-blue-500"> X </span></h1>
+            <p class="text-xs text-stone-500 mt-2">Logic and MOTU Managemente</p>
+        </div>
+        <ul class="flex-1 overflow-y-auto py-4">
+            <li>
+                <button onclick="showSection('dashboard')" class="nav-btn w-full text-left px-6 py-3 hover:bg-stone-800 hover:text-white transition-colors flex items-center border-l-4 border-transparent active-nav">
+                    <i class="fas fa-home w-6"></i> Dashboard
+                </button>
+            </li>
+            <li>
+                <button onclick="showSection('csv-data')" class="nav-btn w-full text-left px-6 py-3 hover:bg-stone-800 hover:text-white transition-colors flex items-center border-l-4 border-transparent">
+                    <i class="fas csv-data w-6"></i> CSV Map
+                </button>
+            </li>
+            <li>
+                <button onclick="showSection('go-code')" class="nav-btn w-full text-left px-6 py-3 hover:bg-stone-800 hover:text-white transition-colors flex items-center border-l-4 border-transparent">
+                    <i class="fas go-code w-6"></i> Main.go
+                </button>
+            </li>
+            <li>
+                <button onclick="showSection('plan-apply')" class="nav-btn w-full text-left px-6 py-3 hover:bg-stone-800 hover:text-white transition-colors flex items-center border-l-4 border-transparent">
+                    <i class="fas plan-apply-list w-6"></i> Plan Apply
+                </button>
+            </li>
+            <li>
+                <button onclick="showSection('scripts')" class="nav-btn w-full text-left px-6 py-3 hover:bg-stone-800 hover:text-white transition-colors flex items-center border-l-4 border-transparent">
+                    <i class="fas scripts w-6"></i> Scripts
+                </button>
+            </li>
+        </ul>
+        <div class="p-6 border-t border-stone-800 text-xs text-stone-500">
+            &copy; 2025 Studio Map Guide
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 p-4 md:p-8 md:ml-64 w-full">
+
+        <!-- Dashboard View -->
+        <section id="dashboard" class="content-section space-y-8 animate-fade-in">
+            <header class="mb-8">
+                <h2 class="text-3xl font-bold text-stone-900 mb-2">Logic is not marshallab</h2>l
+                <p class="text-lg text-stone-600 max-w-3xl">
+                  declarative studio config
+                  
+               </p>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Card 1 -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200 hover:shadow-md transition-shadow cursor-pointer pointer-box" onclick="showSection('csv-data')">
+                    <div class="text-blue-500 mb-4 text-3xl"><i class="fas csv-data"></i></div>
+                    <h3 class="text-xl font-bold mb-2">Studio  Metadata</h3>
+                    <p class="text-stone-600 mb-4">Master your signal flow!  </p>
+                    <span class="text-blue-600 font-semibold text-sm"> more </span>
+          
+                <!-- Card 2 -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200 hover:shadow-md transition-shadow cursor-pointer pointer-box" onclick="showSection('go-code')">
+                    <div class="text-amber-500 mb-4 text-3xl"><i class="fas go-code"></i></div>
+                    <h3 class="text-xl font-bold mb-2">studio map reconciles studion changes</h3>
+                    <p class="text-stone-600 mb-4"></p>
+                    <span class="text-amber-600 font-semibold text-sm"> ...</span>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200 hover:shadow-md transition-shadow cursor-pointer pointer-box" onclick="showSection('plan-apply')">
+                    <div class="text-emerald-500 mb-4 text-3xl"><i class="fas plan-apply-list"></i></div>
+                    <h3 class="text-xl font-bold mb-2"> Terraform your studio </h3>
+                    <p class="text-stone-600 mb-4"> Streamline audio </p>
+                    <span class="text-emerald-600 font-semibold text-sm">...</span>
+                </div>
+            </div>
+
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-r-xl mt-8">
+                <h4 class="font-bold text-blue-900 mb-2">  Logic
+                <p class="text-blue-800">
+                    stuff
+                </p>
+            </div>
+        </section>
+
+        <section id="scripts" class="content-section hidden space-y-8 animate-fade-in">
+            <header>
+                <div class="flex items-center space-x-3 mb-2">
+                    <div class="bg-blue-100 p-2 rounded-lg text-blue-600"><i class="fas csv-data"></i></div>
+                    <h2 class="text-2xl font-bold text-stone-900"> Meta </h2>
+                </div>
+                <p class="text-stone-600 max-w-3xl">
+                   <pre>
+📡 16a: read 6814 datastore keys
+📡 24ai: read 5729 datastore keys
+🎧 10pre: read 128 CoreAudio input names
+
+── 10pre Host In
+  ✋ Host In 3                    "Host In 3"              → "Kick_In"
+  ✋ Host In 4                    "Host In 4"              → "Kick_Out"
+  ✋ Host In 5                    "Host In 5"              → "Josh_Gtr_L"
+  ✋ Host In 6                    "Host In 6"              → "Josh_Gtr_R"
+  ✋ Host In 7                    "Host In 7"              → "OH_L"
+  ✋ Host In 8                    "Host In 8"              → "OH_R"
+  ✋ Host In 9                    "Host In 9"              → "Bass_Pre"
+  ✋ Host In 10                   "Host In 10"             → "John_Vox"
+  ✋ Host In 11                   "Host In 11"             → "Snare_Top"
+  ✋ Host In 12                   "Host In 12"             → "Snare_Bottom"
+  ✋ Host In 13                   "Host In 13"             → "HiHat"
+  ✋ Host In 14                   "Host In 14"             → "Bill_Vox"
+  ✋ Host In 15                   "Host In 15"             → "John_Gtr_Mic"
+  ✋ Host In 16                   "Host In 16"             → "Josh_Vox"
+  ✋ Host In 17                   "Host In 17"             → "Tom1"
+  ✋ Host In 18                   "Host In 18"             → "Tom2"
+  ✋ Host In 19                   "Host In 19"             → "Tom3"
+  ✋ Host In 20                   "Host In 20"             → "Tom4"
+  ✋ Host In 21                   "Host In 21"             → "Tom5"
+  ✋ Host In 23                   "Host In 23"             → "Tom6"
+  ✋ Host In 24                   "Host In 24"             → "Tom7"
+  ✋ Host In 33                   "Host In 33"             → "BT_L"
+  ✋ Host In 34                   "Host In 34"             → "BT_R"
+  ✋ Host In 35                   "Host In 35"             → "DX7"
+  ✋ Host In 36                   "Host In 36"             → "Bass_Station"
+  ✋ Host In 37                   "Host In 37"             → "Fractal_L"
+  ✋ Host In 38                   "Host In 38"             → "Fractal_R"
+  ✋ Host In 39                   "Host In 39"             → "Line6_L"
+  ✋ Host In 40                   "Host In 40"             → "Line6_R"
+  ✋ Host In 43                   "Host In 43"             → "Bass_Direct"
+  ✋ Host In 44                   "Host In 44"             → "Bass_Mic"
+
+── Logic mix
+  ⚠️  Stereo_Out                   ""                       → "preset Output/Mastering.cst not found"
+  ✋ aux Mix_Bus                  "I:O/UA2-1176.pst"       → "home: send 3/4, return 13/14; real-time bounce, or print the return"
+  ✋ stack drums                  ""                       → "Bus/tequiladrumchannel.cst"
+  ✋ stack Smashed_Guitars        ""                       → "Bus/Smashed Guitars.cst"
+  ✋ stack Punchy_Bass            ""                       → "Bus/PunchyWarmBass.cst"
+  ✋ stack Screaming_Demons       ""                       → "Bus/Screaming Demons.cst"
+  ⚠️  stack Synths                 ""                       → "no .cst found: save one or set mix.Synths.preset"
+  ✋ aux FX                       ""                       → "Processing/InsaneFXStack.cst"
+  ✋ track Kick_In                ""                       → "Track/Kick In.cst"
+  ✋ track Kick_Out               ""                       → "Track/Kick Out.cst"
+
+Plan: 34 ok, 0 to change, 39 manual (CueMix/Logic), 2 warnings
+
+🎛️  LOGIC SIGNAL FLOW
+ 🔊 Stereo_Out  ⟵ Output/Mastering.cst
+ └── 📂 Mix_Bus  [Bus 1]  ⟵ I:O/UA2-1176.pst  ⏱ (home: send 3/4, return 13/14; real-time bounce, or print the return)
+     ├── 📂 drums  [Bus 2]  ⟵ Bus/tequiladrumchannel.cst  ⤳ Drum_Verb -12.0dB
+     │   ├── 📂 kick  [Bus 3]
+     │   │   ├── In 3   Kick_In
+     │   │   └── In 4   Kick_Out
+     │   ├── 📂 cymbals  [Bus 4]
+     │   │   ├── In 7   OH_L
+     │   │   ├── In 8   OH_R
+     │   │   └── In 13  HiHat
+     │   ├── 📂 snare  [Bus 5]
+     │   │   ├── In 11  Snare_Top
+     │   │   └── In 12  Snare_Bottom
+     │   └── 📂 toms  [Bus 6]
+     │       ├── In 17  Tom1
+     │       ├── In 18  Tom2
+     │       ├── In 19  Tom3
+     │       ├── In 20  Tom4
+     │       ├── In 21  Tom5
+     │       ├── In 23  Tom6
+     │       └── In 24  Tom7
+     ├── 📂 Smashed_Guitars  [Bus 7]  ⟵ Bus/Smashed Guitars.cst  ⤳ FX -6.0dB
+     │   ├── 📂 joshgtr  [Bus 8]  pan -64
+     │   │   ├── In 5   Josh_Gtr_L
+     │   │   ├── In 6   Josh_Gtr_R
+     │   │   ├── In 37  Fractal_L
+     │   │   └── In 38  Fractal_R
+     │   └── 📂 johngtr  [Bus 9]  pan +63
+     │       ├── In 15  John_Gtr_Mic
+     │       ├── In 39  Line6_L
+     │       └── In 40  Line6_R
+     ├── 📂 Punchy_Bass  [Bus 10]  ⟵ Bus/PunchyWarmBass.cst
+     │   ├── In 9   Bass_Pre
+     │   ├── In 43  Bass_Direct
+     │   └── In 44  Bass_Mic
+     ├── 📂 Screaming_Demons  [Bus 11]  ⟵ Bus/Screaming Demons.cst  ⤳ FX -12.0dB
+     │   ├── In 10  John_Vox
+     │   ├── In 14  Bill_Vox
+     │   └── In 16  Josh_Vox
+     ├── 📂 Synths  [Bus 12]
+     │   ├── In 35  DX7
+     │   └── In 36  Bass_Station
+     ├── 📂 Drum_Verb  [Bus 13]  ⟵ Quantec Room Simulator/StudioDrums.pst
+     └── 📂 FX  [Bus 14]  ⟵ Processing/InsaneFXStack.cst
+
+                   </pre>
+                </p>
+            </header>
+
+            <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+                <h3 class="text-lg font-bold mb-4 border-b pb-2">Path Modifier Simulator</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="space-y-4">
+                        <label class="block text-sm font-medium text-stone-700">Enter a hypothetical script execution path:</label>
+                        <input type="text" id="zsh-path-input" value="/Users/developer/projects/cli-tools/run_tests.sh"
+                               class="w-full p-3 border border-stone-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                        <p class="text-xs text-stone-500"><i class="fas fa-info-circle"></i> Edit the path above to see how Zsh modifiers transform it below.</p>
+                    </div>
+
+                    <div class="bg-stone-50 p-4 rounded-lg border border-stone-200">
+                        <div class="grid grid-cols-1 gap-4">
+                            <!-- Result 1 -->
+                            <div class="flex justify-between items-center p-2 bg-white rounded border border-stone-100">
+                                <span class="font-mono text-pink-600 font-bold">$0</span>
+                                <span id="res-0" class="font-mono text-stone-800 text-sm overflow-x-auto"></span>
+                            </div>
+                            <!-- Result 2 -->
+                            <div class="flex justify-between items-center p-2 bg-white rounded border border-stone-100">
+                                <span class="font-mono text-purple-600 font-bold">${0:t} <span class="text-xs text-stone-400 font-sans ml-2">(Tail)</span></span>
+                                <span id="res-tail" class="font-mono text-stone-800 text-sm overflow-x-auto"></span>
+                            </div>
+                            <!-- Result 3 -->
+                            <div class="flex justify-between items-center p-2 bg-white rounded border border-stone-100">
+                                <span class="font-mono text-indigo-600 font-bold">${0:h} <span class="text-xs text-stone-400 font-sans ml-2">(Head)</span></span>
+                                <span id="res-head" class="font-mono text-stone-800 text-sm overflow-x-auto"></span>
+                            </div>
+                            <!-- Result 4 -->
+                            <div class="flex justify-between items-center p-2 bg-white rounded border border-stone-100">
+                                <span class="font-mono text-blue-600 font-bold">${0:r} <span class="text-xs text-stone-400 font-sans ml-2">(Root)</span></span>
+                                <span id="res-root" class="font-mono text-stone-800 text-sm overflow-x-auto"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-6">
+                <h3 class="text-lg font-bold text-amber-900 mb-2"><i class="fas fa-exclamation-triangle mr-2"></i> The Sourced Script Problem</h3>
+                <p class="text-amber-800 mb-4">
+                    When you run <code>source script.sh</code>, <code>$0</code> often refers to the shell itself (e.g., <code>zsh</code>), not your file.
+                </p>
+                <div class="bg-white p-4 rounded border border-amber-100">
+                    <p class="text-sm font-medium text-stone-500 mb-2">Bulletproof Solution:</p>
+                    <code class="block font-mono text-sm bg-stone-900 text-green-400 p-3 rounded">
+                        local current_script=${(%):-%N}<br>
+                        echo "Running: ${current_script:t}"
+                    </code>
+                </div>
+            </div>
+        </section>
+
+        <!-- Memory Module -->
+        <section id="memory-module" class="content-section hidden space-y-8 animate-fade-in">
+            <header>
+                <div class="flex items-center space-x-3 mb-2">
+                    <div class="bg-amber-100 p-2 rounded-lg text-amber-600"><i class="fas go-code"></i></div>
+                    <h2 class="text-2xl font-bold text-stone-900">C Memory Management</h2>
+                </div>
+                <p class="text-stone-600 max-w-3xl">
+                    Manual memory management requires discipline. Every allocation must have a deallocation.
+                </p>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Functions Reference -->
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+                    <h3 class="text-lg font-bold mb-4">Core Functions</h3>
+                    <div class="space-y-3">
+                        <div class="p-3 border-l-4 border-green-500 bg-stone-50">
+                            <div class="font-mono font-bold text-stone-800">malloc(size)</div>
+                            <div class="text-sm text-stone-600">Allocates raw bytes on the heap. Returns <code>void*</code>.</div>
+                        </div>
+                        <div class="p-3 border-l-4 border-red-500 bg-stone-50">
+                            <div class="font-mono font-bold text-stone-800">free(ptr)</div>
+                            <div class="text-sm text-stone-600">Releases memory. <strong>Crucial:</strong> Use once per allocation.</div>
+                        </div>
+                        <div class="p-3 border-l-4 border-blue-500 bg-stone-50">
+                            <div class="font-mono font-bold text-stone-800">realloc(ptr, size)</div>
+                            <div class="text-sm text-stone-600">Resizes block. May move data to a new address!</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Concept Viz -->
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 flex flex-col justify-center items-center">
+                    <h3 class="text-lg font-bold mb-4 w-full text-left">Concept: Pointer to Pointer</h3>
+                    <p class="text-sm text-stone-500 mb-6 text-left w-full">
+                        Why pass <code>char **</code>? So the function can update the caller's pointer address if <code>realloc</code> moves the memory block.
+                    </p>
+
+                    <!-- CSS Diagram -->
+                    <div class="relative w-full max-w-md h-48 bg-stone-50 border border-stone-200 rounded-lg flex items-center justify-around p-4">
+                        <!-- Caller Stack -->
+                        <div class="flex flex-col items-center z-10">
+                            <div class="text-xs font-bold text-stone-400 mb-1">Stack (Caller)</div>
+                            <div class="w-24 h-16 bg-blue-100 border-2 border-blue-500 rounded flex flex-col items-center justify-center shadow-sm">
+                                <span class="font-mono text-xs font-bold text-blue-900">my_ptr</span>
+                                <span class="text-[10px] text-blue-600">0x100</span>
+                            </div>
+                        </div>
+
+                        <!-- Arrow -->
+                        <div class="h-0.5 w-16 bg-stone-300 relative">
+                            <div class="absolute right-0 -top-1.5 w-3 h-3 border-t-2 border-r-2 border-stone-300 transform rotate-45"></div>
+                        </div>
+
+                        <!-- Heap -->
+                        <div class="flex flex-col items-center z-10">
+                            <div class="text-xs font-bold text-stone-400 mb-1">Heap (Memory)</div>
+                            <div class="w-24 h-16 bg-green-100 border-2 border-green-500 rounded flex flex-col items-center justify-center shadow-sm transition-all duration-500" id="heap-block">
+                                <span class="font-mono text-xs font-bold text-green-900">Buffer</span>
+                                <span class="text-[10px] text-green-600">Data...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="animateRealloc()" class="mt-6 px-4 py-2 bg-stone-800 text-white text-sm rounded hover:bg-black transition-colors">
+                        Simulate realloc() move
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Logging Module -->
+        <section id="logging-module" class="content-section hidden space-y-8 animate-fade-in">
+            <header>
+                <div class="flex items-center space-x-3 mb-2">
+                    <div class="bg-emerald-100 p-2 rounded-lg text-emerald-600"><i class="fas plan-apply-list"></i></div>
+                    <h2 class="text-2xl font-bold text-stone-900">macOS Unified Logging</h2>
+                </div>
+                <p class="text-stone-600 max-w-3xl">
+                    Logs on macOS are a database, not files. Use <code>log show</code> or <code>log stream</code> to access them.
+                </p>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Log Query Builder (Main) -->
+                <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+                    <h3 class="text-lg font-bold mb-4">Command Builder</h3>
+                    <form id="log-form" class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Subsystem</label>
+                                <input type="text" id="log-subsystem" placeholder="com.your.app" class="w-full p-2 border border-stone-300 rounded text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Category (Optional)</label>
+                                <input type="text" id="log-category" placeholder="Network" class="w-full p-2 border border-stone-300 rounded text-sm">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Time Range</label>
+                                <select id="log-time" class="w-full p-2 border border-stone-300 rounded text-sm bg-white">
+                                    <option value="--last 5m">Last 5 Minutes</option>
+                                    <option value="--last 1h">Last 1 Hour</option>
+                                    <option value="--last 24h">Last 24 Hours</option>
+                                    <option value="Stream">Stream (Live)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Output Style</label>
+                                <select id="log-style" class="w-full p-2 border border-stone-300 rounded text-sm bg-white">
+                                    <option value="--style syslog">Syslog (Full Msg)</option>
+                                    <option value="--style json">JSON (Metadata)</option>
+                                    <option value="--style compact">Compact (Default)</option>
+                                </select>
+                            </div>
+                            <div class="flex items-end pb-2 space-x-4">
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" id="log-info" checked class="text-blue-600 rounded">
+                                    <span class="text-sm">Include Info</span>
+                                </label>
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" id="log-debug" class="text-blue-600 rounded">
+                                    <span class="text-sm">Include Debug</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Generated Code -->
+                        <div class="mt-4 pt-4 border-t border-stone-100">
+                            <label class="block text-xs font-bold text-stone-400 uppercase mb-2">Generated Command:</label>
+                            <div class="relative">
+                                <code id="log-output" class="block w-full bg-stone-900 text-green-400 p-4 rounded-lg font-mono text-sm break-all">
+                                    log show ...
+                                </code>
+                                <button type="button" onclick="copyLogCmd()" class="absolute top-2 right-2 text-stone-500 hover:text-white bg-stone-800 hover:bg-stone-700 p-1 rounded px-2 text-xs transition-colors">
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Log Levels Visualization -->
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 flex flex-col">
+                    <h3 class="text-lg font-bold mb-2">Log Visibility</h3>
+                    <p class="text-xs text-stone-500 mb-4">Most commands hide Info/Debug by default. Use flags to see them.</p>
+
+                    <div class="chart-container">
+                        <canvas id="logChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-stone-800 text-stone-300 rounded-xl p-6 border-l-4 border-purple-500">
+                <h3 class="text-lg font-bold text-white mb-2"><i class="fas fa-user-secret mr-2"></i> Data Privacy</h3>
+                <p class="mb-4 text-sm">
+                    Dynamic strings are masked as <code>&lt;private&gt;</code> by default to protect user data.
+                </p>
+                <div class="bg-stone-900 p-3 rounded font-mono text-sm">
+                    <span class="text-purple-400">os_log_info</span>(log, <span class="text-yellow-300">"File: %{public}s"</span>, filename);
+                </div>
+            </div>
+        </section>
+
+        <!-- Headers Module -->
+        <section id="headers-module" class="content-section hidden space-y-8 animate-fade-in">
+            <header>
+                <div class="flex items-center space-x-3 mb-2">
+                    <div class="bg-purple-100 p-2 rounded-lg text-purple-600"><i class="fas scripts"></i></div>
+                    <h2 class="text-2xl font-bold text-stone-900">Header Files Strategy</h2>
+                </div>
+                <p class="text-stone-600 max-w-3xl">
+                    Understand the difference between <code>#import</code> and <code>#include</code> to keep your interface clean and compilation error-free.
+                </p>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Obj-C -->
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 text-center">
+                    <div class="text-4xl text-blue-500 mb-4"><i class="fab fa-apple"></i></div>
+                    <h3 class="font-bold text-lg mb-2">Objective-C</h3>
+                    <p class="text-sm text-stone-500 mb-4">Frameworks like Foundation</p>
+                    <code class="block bg-stone-100 p-2 rounded text-sm text-blue-800 font-mono">#import &lt;Foundation/...&gt;</code>
+                    <p class="text-xs text-stone-400 mt-2">Includes automatic guards.</p>
+                </div>
+
+                <!-- C Std -->
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 text-center">
+                    <div class="text-4xl text-stone-500 mb-4"><i class="fas fa-code"></i></div>
+                    <h3 class="font-bold text-lg mb-2">Standard C</h3>
+                    <p class="text-sm text-stone-500 mb-4">POSIX libs like unistd, stdio</p>
+                    <code class="block bg-stone-100 p-2 rounded text-sm text-stone-800 font-mono">#include &lt;unistd.h&gt;</code>
+                    <p class="text-xs text-stone-400 mt-2">Manual guards (usually).</p>
+                </div>
+
+                <!-- Local -->
+                <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 text-center">
+                    <div class="text-4xl text-amber-500 mb-4"><i class="fas fa-folder-open"></i></div>
+                    <h3 class="font-bold text-lg mb-2">Local Files</h3>
+                    <p class="text-sm text-stone-500 mb-4">Your own .h files</p>
+                    <code class="block bg-stone-100 p-2 rounded text-sm text-amber-800 font-mono">#import "MyLogger.h"</code>
+                    <p class="text-xs text-stone-400 mt-2">Your Public Interface.</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+                 <h3 class="font-bold text-lg mb-4">The Header Analogy</h3>
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div class="p-4 bg-stone-50 rounded border border-stone-100">
+                         <span class="font-bold text-stone-700 block mb-1">Header (.h)</span>
+                         <span class="text-sm text-stone-600">Like <code>exports</code> in Node.js or <code>public</code> in Java. Defines what the world sees.</span>
+                     </div>
+                     <div class="p-4 bg-stone-50 rounded border border-stone-100">
+                         <span class="font-bold text-stone-700 block mb-1">Implementation (.m/.c)</span>
+                         <span class="text-sm text-stone-600">Like <code>private</code> methods. Contains the actual logic and internal helpers.</span>
+                     </div>
+                 </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // --- State Management ---
+        const state = {
+            currentSection: 'dashboard',
+            zshPath: '/Users/developer/projects/cli-tools/run_tests.sh',
+        };
+
+        // --- Navigation ---
+        function showSection(sectionId) {
+            // Hide all sections
+            document.querySelectorAll('.content-section').forEach(el => {
+                el.classList.add('hidden');
+            });
+
+            // Show target
+            const target = document.getElementById(sectionId);
+            if(target) target.classList.remove('hidden');
+
+            // Update Nav State
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active-nav', 'bg-stone-800', 'text-white', 'border-blue-500');
+                btn.classList.add('border-transparent');
+            });
+
+            // Highlight active button (approximate match)
+            const activeBtn = Array.from(document.querySelectorAll('.nav-btn')).find(btn =>
+                btn.getAttribute('onclick').includes(sectionId)
+            );
+            if(activeBtn) {
+                activeBtn.classList.add('active-nav', 'bg-stone-800', 'text-white', 'border-blue-500');
+                activeBtn.classList.remove('border-transparent');
+            }
+
+            state.currentSection = sectionId;
+
+            // Trigger Chart resize if necessary
+            if(sectionId === 'logging-module') {
+                setTimeout(() => {
+                    if(window.logChartInstance) window.logChartInstance.resize();
+                }, 100);
+            }
+        }
+
+        // --- Zsh Path Logic ---
+        function updateZshModifiers() {
+            const path = document.getElementById('zsh-path-input').value.trim();
+            if(!path) return;
+
+            // $0 -> Full Path
+            document.getElementById('res-0').textContent = path;
+
+            // :t -> Tail (Filename)
+            const tail = path.split('/').pop();
+            document.getElementById('res-tail').textContent = tail;
+
+            // :h -> Head (Directory)
+            const head = path.substring(0, path.lastIndexOf('/'));
+            document.getElementById('res-head').textContent = head || '.';
+
+            // :r -> Root (Remove extension)
+            const root = path.lastIndexOf('.') > path.lastIndexOf('/')
+                ? path.substring(0, path.lastIndexOf('.'))
+                : path;
+            document.getElementById('res-root').textContent = root;
+        }
+
+        // --- C Memory Viz Logic ---
+        function animateRealloc() {
+            const heapBlock = document.getElementById('heap-block');
+
+            // Step 1: Fade out (simulate free/move)
+            heapBlock.style.opacity = '0.5';
+            heapBlock.style.transform = 'scale(0.9)';
+
+            setTimeout(() => {
+                // Step 2: Move to new "address"
+                heapBlock.style.transform = 'translateX(50px) scale(1.0)';
+                heapBlock.style.opacity = '1';
+                heapBlock.classList.remove('bg-green-100', 'border-green-500');
+                heapBlock.classList.add('bg-purple-100', 'border-purple-500'); // Change color to indicate new block
+
+                // Reset after 2 seconds
+                setTimeout(() => {
+                    heapBlock.style.transform = 'translateX(0)';
+                    heapBlock.classList.add('bg-green-100', 'border-green-500');
+                    heapBlock.classList.remove('bg-purple-100', 'border-purple-500');
+                }, 2000);
+            }, 600);
+        }
+
+        // --- Logging Builder Logic ---
+        function updateLogCommand() {
+            const subsystem = document.getElementById('log-subsystem').value || 'com.example.app';
+            const category = document.getElementById('log-category').value;
+            const time = document.getElementById('log-time').value;
+            const style = document.getElementById('log-style').value;
+            const includeInfo = document.getElementById('log-info').checked;
+            const includeDebug = document.getElementById('log-debug').checked;
+
+            let predicate = `subsystem == "${subsystem}"`;
+            if (category) {
+                predicate += ` AND category == "${category}"`;
+            }
+
+            let cmdBase = (time === 'Stream') ? 'log stream' : 'log show';
+            let flags = [];
+
+            flags.push(`--predicate '${predicate}'`);
+
+            if (time !== 'Stream') {
+                flags.push(time);
+            }
+
+            if (includeInfo) flags.push('--info');
+            if (includeDebug) flags.push('--debug');
+            flags.push(style);
+
+            const finalCmd = `${cmdBase} ${flags.join(' ')}`;
+            document.getElementById('log-output').textContent = finalCmd;
+        }
+
+        function copyLogCmd() {
+            const text = document.getElementById('log-output').textContent.trim();
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            alert('Command copied to clipboard!');
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Mobile Menu
+            document.getElementById('mobile-menu-btn').addEventListener('click', () => {
+                const sidebar = document.getElementById('sidebar');
+                sidebar.classList.toggle('hidden');
+                sidebar.classList.toggle('fixed');
+                sidebar.classList.toggle('inset-0');
+            });
+
+            // Listeners
+            document.getElementById('zsh-path-input').addEventListener('input', updateZshModifiers);
+
+            const logInputs = document.querySelectorAll('#log-form input, #log-form select');
+            logInputs.forEach(input => input.addEventListener('input', updateLogCommand));
+
+            // Init values
+            updateZshModifiers();
+            updateLogCommand();
+
+            // Chart.js - Log Levels
+            const ctx = document.getElementById('logChart').getContext('2d');
+            window.logChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Fault', 'Error', 'Default', 'Info', 'Debug'],
+                    datasets: [{
+                        label: 'Visibility',
+                        data: [100, 100, 100, 40, 20], // Conceptual visibility score
+                        backgroundColor: [
+                            '#ef4444', // Fault - Red
+                            '#f97316', // Error - Orange
+                            '#3b82f6', // Default - Blue
+                            '#10b981', // Info - Emerald (Needs flag)
+                            '#a855f7'  // Debug - Purple (Needs flag)
+                        ],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const labels = [
+                                        'Always Visible',
+                                        'Always Visible',
+                                        'Visible (Persisted)',
+                                        'Hidden by default (--info required)',
+                                        'Hidden by default (--debug required)'
+                                    ];
+                                    return labels[context.dataIndex];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { display: false },
+                            grid: { display: false }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -77,11 +77,11 @@ func TestLoadSheet(t *testing.T) {
 
 // TestStudioSheetLoads guards the real sheet export: it must parse against the real config.
 func TestStudioSheetLoads(t *testing.T) {
-	cfg, err := loadConfig(configPath)
+	paths, cfg, err := resolvePaths("", loadConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadSheet(sheetPath, cfg); err != nil {
+	if _, err := LoadSheet(paths.Sheet, cfg); err != nil {
 		t.Fatal(err)
 	}
 }

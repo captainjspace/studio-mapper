@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
 )
 
-const (
-	configPath = "studio_config.json"
-	sheetPath  = "studio-inputs.csv"
-)
+// env is what every command reads: where the files are and the parsed config.
+var env struct {
+	paths Paths
+	cfg   Config
+}
 
 // Config holds what is not per-channel; per-channel names and stacks come from the sheet.
 type Config struct {
@@ -25,6 +28,8 @@ type Config struct {
 	PresetDir  string             `json:"preset_dir"`
 	Mix        map[string]MixNode `json:"mix"`
 	StemSplit  map[string]string  `json:"stem_split"` // Stem Splitter output -> Stack
+	Sheet      string             `json:"sheet"`      // relative to this config file
+	StateDir   string             `json:"state_dir"`  // relative to this config file
 }
 
 // HostInput maps a block of device channels onto the host's Host In numbers.
@@ -44,15 +49,26 @@ var commands = map[string]func(args []string) error{
 }
 
 func main() {
-	cmd, args := "plan", os.Args[1:]
+	configFlag, args := takeFlag(os.Args[1:], "config")
+	sheetFlag, args := takeFlag(args, "sheet")
+	cmd := "plan"
 	if len(args) > 0 {
 		cmd, args = args[0], args[1:]
 	}
 	run, ok := commands[cmd]
 	if !ok {
-		fmt.Println("usage: studio-map [plan [-v] | apply | routing [--stems] | restore <state/snapshot.json>]")
+		fmt.Println("usage: studio-map [--config <studio_config.json>] [--sheet <inputs.csv>] [plan [-v] | apply | routing [--stems] [--json] | restore <state/snapshot.json>]")
 		os.Exit(2)
 	}
+	paths, cfg, err := resolvePaths(configFlag, loadConfig)
+	if err != nil {
+		fmt.Printf("❌ %v\n", err)
+		os.Exit(1)
+	}
+	if sheetFlag != "" {
+		paths.Sheet, _ = filepath.Abs(sheetFlag)
+	}
+	env.paths, env.cfg = paths, cfg
 	if err := run(args); err != nil {
 		fmt.Printf("❌ %v\n", err)
 		os.Exit(1)
@@ -107,11 +123,8 @@ type session struct {
 }
 
 func newSession() (*session, error) {
-	cfg, err := loadConfig(configPath)
-	if err != nil {
-		return nil, err
-	}
-	inputs, err := LoadSheet(sheetPath, cfg)
+	cfg := env.cfg
+	inputs, err := LoadSheet(env.paths.Sheet, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -133,17 +146,17 @@ func runPlan(args []string) error {
 
 // runRouting prints the Logic build sheet. It needs only the sheet, config and presets, not the rack.
 func runRouting(args []string) error {
-	cfg, err := loadConfig(configPath)
-	if err != nil {
-		return err
-	}
-	inputs, err := LoadSheet(sheetPath, cfg)
+	cfg := env.cfg
+	inputs, err := LoadSheet(env.paths.Sheet, cfg)
 	if err != nil {
 		return err
 	}
 	presets := loadPresets(cmp.Or(cfg.PresetDir, defaultPresetDir))
 	g := buildMixGraph(cfg, inputs, presets)
-	if len(args) > 0 && args[0] == "--stems" {
+
+	mode, problems := "session", [][2]string{}
+	if slices.Contains(args, "--stems") {
+		mode = "stems"
 		known := g.Nodes
 		stems := stemInputs(cfg)
 		g = buildMixGraph(cfg, stems, presets)
@@ -151,12 +164,22 @@ func runRouting(args []string) error {
 		g.pruneEmptyStacks()
 		for _, in := range stems {
 			if known[in.Stack] == nil {
-				fmt.Printf("  ⚠️  %s: stack %q is not in the sheet or mix config\n", in.Source, in.Stack)
+				problems = append(problems, [2]string{in.Source, fmt.Sprintf("stack %q is not in the sheet or mix config", in.Stack)})
 			}
 		}
 	}
+	problems = append(problems, validateMix(g, presets)...)
+
+	if slices.Contains(args, "--json") {
+		out, err := json.MarshalIndent(routingDoc(g, presets, mode, problems), "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(out))
+		return nil
+	}
 	printRouting(g, presets)
-	for _, pr := range validateMix(g, presets) {
+	for _, pr := range problems {
 		fmt.Printf("  ⚠️  %s: %s\n", pr[0], pr[1])
 	}
 	GenerateConsoleBlueprint(g)
@@ -173,7 +196,7 @@ func runApply(args []string) error {
 	for _, dev := range sortedKeys(s.plan.Writes) {
 		writes := s.plan.Writes[dev]
 		url := s.cfg.Devices[dev]
-		snap, err := saveSnapshot(stateDir, dev, url, s.live.Datastores[dev])
+		snap, err := saveSnapshot(env.paths.State, dev, url, s.live.Datastores[dev])
 		if err != nil {
 			return fmt.Errorf("snapshot %s: %w", dev, err)
 		}
@@ -201,11 +224,7 @@ func runRestore(args []string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := loadConfig(configPath)
-	if err != nil {
-		return err
-	}
-	url := cfg.Devices[snap.Device]
+	url := env.cfg.Devices[snap.Device]
 	if url == "" {
 		url = snap.URL
 	}

@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const stateDir = "state"
-
 // Snapshot records a device's input names before apply, so they can be restored.
 type Snapshot struct {
 	Device string            `json:"device"`

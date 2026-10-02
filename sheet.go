@@ -21,6 +21,11 @@ type Input struct {
 	Active bool
 	Source string
 	Stem   bool // a Stem Splitter output, not a hardware input
+
+	Musician    string
+	SoundSource string
+	Mic         string
+	Preamp      string
 }
 
 // where names the track's source for build sheets: "In 5" or "Stem".
@@ -39,7 +44,7 @@ func stemInputs(cfg Config) []Input {
 	var inputs []Input
 	for _, stem := range stemOrder {
 		if stack, ok := cfg.StemSplit[stem]; ok {
-			inputs = append(inputs, Input{Label: "Split_" + stem, Stack: stack, Active: true, Stem: true, Source: "Stem Splitter " + stem})
+			inputs = append(inputs, Input{Label: "Split_" + stem, Stack: stack, Active: true, Stem: true, Source: "Stem Splitter " + stem, SoundSource: stem})
 		}
 	}
 	return inputs
@@ -87,7 +92,7 @@ func hostInFor(cfg Config, device, bank string, ch int) int {
 func LoadSheet(path string, cfg Config) ([]Input, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sheet %s: %w (set \"sheet\" in %s or pass --sheet)", path, err, configName)
 	}
 	defer f.Close()
 
@@ -142,6 +147,11 @@ func LoadSheet(path string, cfg Config) ([]Input, error) {
 			Stack:  get(rec, "Stack"),
 			Active: strings.EqualFold(get(rec, "Checked?"), "TRUE"),
 			Source: iface + " " + raw,
+
+			Musician:    get(rec, "Musician"),
+			SoundSource: get(rec, "Sound Source"),
+			Mic:         get(rec, "Device Source"),
+			Preamp:      get(rec, "Preamp"),
 		})
 	}
 	return inputs, nil
